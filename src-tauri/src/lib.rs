@@ -55,6 +55,8 @@ pub fn run() {
             commands::system_commands::set_global_shortcut,
             commands::system_commands::select_pet,
             commands::system_commands::get_settings,
+            // Phase 07: agent state → tray icon
+            commands::system_commands::set_tray_state,
         ])
         .setup(|app| {
             init_plugins(app)?;

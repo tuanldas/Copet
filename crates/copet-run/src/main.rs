@@ -2,8 +2,10 @@
 //!
 //! Usage: copet-run -- <cmd> [args...]
 //!
-//! Spawns `<cmd>` with inherited stdio, sends `working` when the child starts,
-//! then `done` (exit 0) or `error` (exit ≠ 0) when it finishes.
+//! Spawns `<cmd>` with inherited stdio, sends `working` (tool = cmd) when the
+//! child starts, then `done` or `error` (tool = None) when it finishes.
+//! tool is None on done/error so the frontend does NOT award a token for the
+//! completion event (tokens are only for real agent tool_call events).
 //! Propagates the child's exit code exactly so callers see the real result.
 
 use copet_protocol::{Agent, AgentEvent, State, copet_socket_path};
@@ -59,12 +61,13 @@ fn main() -> ExitCode {
         Ok(s) => s.code().unwrap_or(1),
         Err(e) => {
             eprintln!("copet-run: failed to spawn '{cmd}': {e}");
-            // Emit error event and exit 1.
+            // Emit error event. tool = None: completion is not a tool_call,
+            // so the frontend must not award a token for it.
             send_event(AgentEvent {
                 agent: Agent::Wrapper,
                 session_id,
                 state: State::Error,
-                tool: Some(cmd.clone()),
+                tool: None,
                 project,
                 ts: unix_now(),
             });
@@ -78,11 +81,14 @@ fn main() -> ExitCode {
         State::Error
     };
 
+    // tool = None on completion events: wrapper done/error is not a tool_call.
+    // The frontend's applyAgentXp only awards tokens when tool != null, so this
+    // ensures `copet run -- sleep 2` gives +10 XP / +0 token (not +1 token).
     send_event(AgentEvent {
         agent: Agent::Wrapper,
         session_id,
         state: final_state,
-        tool: Some(cmd.clone()),
+        tool: None,
         project,
         ts: unix_now(),
     });

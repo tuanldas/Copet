@@ -11,6 +11,13 @@
  * - Hẹn ANIM_DONE cho các transient state (eat/celebrate/error/evolve)
  * - Safety DRAG_END khi window blur (tránh pet kẹt drag state, tauri#10767)
  * - DEV-only auto-cycle demo timer (overlay window không có keyboard focus)
+ *
+ * Phase 07 additions (ADDITIVE — does not change render/drag/click-through core):
+ * - mountPet now returns PetHandle in addition to cleanup function.
+ * - PetHandle exposes sendAgentEvent(), setGlow(), playParticle().
+ * - Glow state is stored and drawn as a canvas halo each render frame.
+ * - Particle "hearts"/"sparkle" plays a one-shot canvas effect.
+ * - All effects respect prefers-reduced-motion (skip particles, dim glow).
  */
 
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -22,9 +29,43 @@ import { SpritePlayer } from "./sprite-player.js";
 import { AnimationController } from "./animation-controller.js";
 import { RenderLoop } from "./render-loop.js";
 import { petStore, getPetState, TRANSIENT_STATES } from "./pet-state-machine.js";
+import type { AgentEventType } from "./pet-state-machine.js";
 import type { AnimResolution } from "./animation-controller.js";
 import { onPetDataChange, getPetData } from "../tamagotchi/pet-store.js";
 import { findItem } from "../economy/item-catalog.js";
+
+// ── Phase 07: PetHandle public API ───────────────────────────────────────────
+
+/**
+ * Public handle returned by mountPet().
+ * agent-bridge uses this to push agent state + visual effects into the pet.
+ * All methods are additive — they do not touch drag/click-through/anim core.
+ */
+export interface PetHandle {
+  /** Send an AGENT_EVENT to the pet state machine. */
+  sendAgentEvent(agentState: AgentEventType): void;
+  /** Set glow halo color around the pet (null = no glow). */
+  setGlow(color: string | null): void;
+  /** Play a one-shot particle effect ("hearts" | "flash"). */
+  playParticle(kind: "hearts" | "flash"): void;
+  /** Returns current logical pet position (for tooltip positioning). */
+  getPosition(): { x: number; y: number };
+}
+
+/** Particle burst descriptor (internal). */
+interface ParticleBurst {
+  kind: "hearts" | "flash";
+  /** ms timestamp when the burst started */
+  startedAt: number;
+  /** Duration in ms */
+  durationMs: number;
+}
+
+/** Glow/particle state — mutated by PetHandle methods, read by render callback. */
+const _agentVisual = {
+  glowColor: null as string | null,
+  burst: null as ParticleBurst | null,
+};
 
 /** Kích thước hiển thị pet trên canvas (logical px) — scale từ 192×208 xuống */
 const PET_DISPLAY_WIDTH = 96;
@@ -39,9 +80,11 @@ const DEV_MODE = import.meta.env.DEV;
 /**
  * Mount pet engine lên canvas.
  * @param canvas - Element #pet-canvas trong DOM
- * @returns cleanup function — gọi khi HMR remount để tránh listener leak
+ * @returns object with cleanup function and PetHandle for agent-bridge (Phase 07)
  */
-export async function mountPet(canvas: HTMLCanvasElement): Promise<() => void> {
+export async function mountPet(
+  canvas: HTMLCanvasElement,
+): Promise<{ cleanup: () => void; handle: PetHandle }> {
   // ── DPR setup ────────────────────────────────────────────────────────────
   setupCanvasDpr(canvas);
   // Track resize handler để remove khi cleanup (tránh leak khi HMR remount) [Fix #5]
@@ -96,6 +139,12 @@ export async function mountPet(canvas: HTMLCanvasElement): Promise<() => void> {
     animCtrl.resolve(getPetState()),
     ({ frameIndex, position, timestamp }) => {
       player.clearAll();
+
+      // Phase 07: draw glow halo BEFORE pet sprite so it sits behind the sprite.
+      if (_agentVisual.glowColor) {
+        drawGlow(ctx, position.x, position.y, _agentVisual.glowColor);
+      }
+
       player.draw({
         row: animCtrl.resolve(getPetState()).row,
         col: frameIndex,
@@ -107,6 +156,16 @@ export async function mountPet(canvas: HTMLCanvasElement): Promise<() => void> {
 
       // Draw cosmetic overlays after the pet sprite (same dest rect).
       drawCosmeticOverlays(ctx, position.x, position.y);
+
+      // Phase 07: draw particle burst ABOVE everything.
+      if (_agentVisual.burst) {
+        const age = timestamp - _agentVisual.burst.startedAt;
+        if (age < _agentVisual.burst.durationMs) {
+          drawParticles(ctx, position.x, position.y, _agentVisual.burst, age);
+        } else {
+          _agentVisual.burst = null; // burst finished
+        }
+      }
 
       reportHitRect(position, timestamp);
     }
@@ -268,10 +327,42 @@ export async function mountPet(canvas: HTMLCanvasElement): Promise<() => void> {
     canvas.removeEventListener("mousedown", onMouseDown);
     canvas.removeEventListener("contextmenu", onContextMenu);
     overlayCache.clear();
+    // Reset Phase 07 visual state so HMR remount starts clean
+    _agentVisual.glowColor = null;
+    _agentVisual.burst = null;
   };
 
   window.addEventListener("beforeunload", cleanup, { once: true });
-  return cleanup;
+
+  // ── Phase 07: PetHandle implementation ───────────────────────────────────
+  const handle: PetHandle = {
+    sendAgentEvent(agentState: AgentEventType): void {
+      petStore.send({ type: "AGENT_EVENT", agentState });
+    },
+
+    setGlow(color: string | null): void {
+      // Store the raw hex color; reduced-motion dimming is applied in drawGlow
+      // via ctx.globalAlpha — never mutate the hex string (appending "80" would
+      // create a 10-char hex that confuses subsequent alpha appends in drawGlow).
+      _agentVisual.glowColor = color;
+    },
+
+    playParticle(kind: "hearts" | "flash"): void {
+      // Respect reduced-motion: skip particles entirely
+      if (prefersReducedMotion()) return;
+      _agentVisual.burst = {
+        kind,
+        startedAt: performance.now(),
+        durationMs: kind === "flash" ? 400 : 1200,
+      };
+    },
+
+    getPosition(): { x: number; y: number } {
+      return { ...loop.position };
+    },
+  };
+
+  return { cleanup, handle };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -287,6 +378,90 @@ function setupCanvasDpr(canvas: HTMLCanvasElement): void {
   if (ctx) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
+}
+
+/** Phase 07: Check OS prefers-reduced-motion. */
+function prefersReducedMotion(): boolean {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/**
+ * Phase 07: Draw glow halo behind pet sprite.
+ * Uses a radial gradient centred on the pet bounding box.
+ * Reduced-motion: dims glow to 40% opacity via ctx.globalAlpha.
+ * The color param must be a plain 6-char hex (e.g. "#3B82F6"); no alpha
+ * suffix is appended to avoid creating invalid 10-char hex strings.
+ */
+function drawGlow(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  color: string,
+): void {
+  const cx = x + PET_DISPLAY_WIDTH / 2;
+  const cy = y + PET_DISPLAY_HEIGHT / 2;
+  const radius = Math.max(PET_DISPLAY_WIDTH, PET_DISPLAY_HEIGHT) * 0.75;
+
+  // Use ctx.globalAlpha for reduced-motion dimming; gradient stops use
+  // inline alpha on the hex (#rrggbbaa — 8-char CSS color, always valid).
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+  grad.addColorStop(0, color + "66");   // 40% alpha centre
+  grad.addColorStop(0.5, color + "33"); // 20% alpha mid
+  grad.addColorStop(1, color + "00");   // transparent edge
+
+  ctx.save();
+  // Reduced-motion: render at 40% of normal opacity so glow is subtle.
+  ctx.globalAlpha = prefersReducedMotion() ? 0.4 : 1.0;
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, radius, radius * 0.85, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * Phase 07: Draw one-shot particle burst (hearts / sparkle / flash).
+ * progress is age/durationMs in [0,1]. Simple canvas-based particles.
+ */
+function drawParticles(
+  ctx: CanvasRenderingContext2D,
+  petX: number,
+  petY: number,
+  burst: { kind: "hearts" | "flash"; durationMs: number },
+  ageMs: number,
+): void {
+  const progress = Math.min(ageMs / burst.durationMs, 1);
+
+  ctx.save();
+
+  if (burst.kind === "flash") {
+    // Red flash overlay that fades out quickly
+    const alpha = Math.max(0, 0.5 * (1 - progress * 2));
+    ctx.fillStyle = `rgba(239,68,68,${alpha.toFixed(3)})`;
+    ctx.fillRect(petX, petY, PET_DISPLAY_WIDTH, PET_DISPLAY_HEIGHT);
+  } else {
+    // "hearts": scatter 6 heart symbols upward from pet centre
+    const SYMBOLS = ["♥", "♡", "♥"];
+    const cx = petX + PET_DISPLAY_WIDTH / 2;
+    const cy = petY + PET_DISPLAY_HEIGHT / 2;
+
+    ctx.font = "14px serif";
+    ctx.textAlign = "center";
+
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
+      const spread = 36 * progress;
+      const rise = 30 * progress;
+      const px = cx + Math.cos(angle) * spread;
+      const py = cy - rise - Math.sin(angle) * spread * 0.3;
+      const alpha = Math.max(0, 1 - progress * 1.4);
+      ctx.globalAlpha = alpha;
+      ctx.fillText(SYMBOLS[i % SYMBOLS.length], px, py);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.restore();
 }
 
 /** Kiểm tra pointer nằm trong AABB của pet (logical px). */

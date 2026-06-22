@@ -23,7 +23,7 @@ MVP-first. Stack đã chốt (xem `docs/tech-stack.md`). Phase 1 là gate rủi 
 | 04 | tamagotchi-core | Stats decay, XP/level, evolution gate, offline handling, persistence (tauri-plugin-store) | 3d | ✅ done |
 | 05 | token-economy-and-shop | Token từ activity + Shop UI (food + cosmetics) + buy/equip | 2.5d | ✅ done |
 | 06 | ui-shell-and-system-integration | Stats HUD, Settings, tray menu, global shortcut, autostart, notification, positioner/window-state | 3d | ✅ done |
-| 07 | wire-agent-state-to-pet-reaction | Nối agent event → pet animation/mood/tooltip + xử lý multi-session | 2d | pending |
+| 07 | wire-agent-state-to-pet-reaction | Nối agent event → pet animation/mood/tooltip + xử lý multi-session | 2d | ✅ done |
 | 08 | packaging-and-distribution | Build dmg/msi/nsis/appimage/deb + hook install flow + signing notes | 2d | pending |
 
 ## Dependency graph

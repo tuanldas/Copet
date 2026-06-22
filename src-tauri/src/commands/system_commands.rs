@@ -1,11 +1,12 @@
-// system_commands.rs — Tauri commands for system-level features (Phase 06).
+// system_commands.rs — Tauri commands for system-level features (Phase 06 + 07).
 //
 // Commands: enable_autostart, is_autostart_enabled, set_global_shortcut,
-//           select_pet, get_settings
+//           select_pet, get_settings, set_tray_state (Phase 07)
 
 use tauri::AppHandle;
 // ManagerExt provides `.autolaunch()` on AppHandle (the actual method name in v2.5).
 use tauri_plugin_autostart::ManagerExt;
+use crate::tray::{set_tray_state as tray_set_state, TrayAgentState};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_store::StoreExt;
 
@@ -104,4 +105,22 @@ pub fn get_settings(app: AppHandle) -> Result<serde_json::Value, String> {
         "shortcut": shortcut,
         "selected_pet": selected_pet,
     }))
+}
+
+/// Phase 07: Update the system tray tooltip to reflect the current agent state.
+///
+/// Called from the frontend agent-bridge on every effectiveState change.
+/// Maps the canonical AgentState string (working|waiting|done|error|idle) to
+/// TrayAgentState and delegates to tray::set_tray_state().
+#[tauri::command]
+pub fn set_tray_state(app: AppHandle, state: String) -> Result<(), String> {
+    let tray_state = match state.as_str() {
+        "working" => TrayAgentState::Working,
+        "waiting" => TrayAgentState::Waiting,
+        "done"    => TrayAgentState::Done,
+        "error"   => TrayAgentState::Error,
+        _ => TrayAgentState::Idle, // covers "idle" and any unknown value
+    };
+    tray_set_state(&app, tray_state);
+    Ok(())
 }
