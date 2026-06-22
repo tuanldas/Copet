@@ -12,11 +12,19 @@ use std::time::Duration;
 
 use tauri::{App, AppHandle, Manager, WebviewWindow};
 
-/// Interactive hit region for the transparent pet overlay: a circle around the window
-/// centre, radius in logical px. The frontend reports the pet's real radius via the
-/// `set_pet_hit_radius` command so hit-testing matches what is actually drawn.
+/// The pet's interactive rect in logical px, relative to the pet window's content top-left.
+/// The frontend reports it (and updates it as the pet moves) via `set_pet_hit_rect` so the
+/// click-through hit-test tracks wherever the pet actually is, not a fixed centre.
+#[derive(Clone, Copy, Default)]
+struct PetRect {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+}
+
 struct PetHit {
-    radius: Mutex<f64>,
+    rect: Mutex<PetRect>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -24,9 +32,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(Arc::new(PetHit {
-            radius: Mutex::new(64.0),
+            rect: Mutex::new(PetRect::default()),
         }))
-        .invoke_handler(tauri::generate_handler![set_pet_hit_radius])
+        .invoke_handler(tauri::generate_handler![set_pet_hit_rect])
         .setup(|app| {
             init_plugins(app)?;
             init_windows(app)?;
@@ -38,11 +46,12 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-/// Frontend reports the pet's interactive radius (logical px).
+/// Frontend reports the pet's interactive rect (logical px, window-content coordinates),
+/// updating it as the pet moves so click-through tracks the pet.
 #[tauri::command]
-fn set_pet_hit_radius(state: tauri::State<'_, Arc<PetHit>>, radius: f64) {
-    if radius.is_finite() && radius >= 0.0 {
-        *state.radius.lock().unwrap() = radius;
+fn set_pet_hit_rect(state: tauri::State<'_, Arc<PetHit>>, x: f64, y: f64, w: f64, h: f64) {
+    if [x, y, w, h].iter().all(|v| v.is_finite()) && w >= 0.0 && h >= 0.0 {
+        *state.rect.lock().unwrap() = PetRect { x, y, w, h };
     }
 }
 
@@ -91,7 +100,6 @@ fn start_click_through_poll(app: AppHandle) {
         std::thread::sleep(Duration::from_millis(33));
         let app_main = app.clone();
         let applied = applied.clone();
-        // run_on_main_thread errors once the event loop is gone (app quitting) → stop.
         let dispatched = app.run_on_main_thread(move || {
             let Some(pet) = app_main.get_webview_window("pet") else {
                 return;
@@ -107,22 +115,22 @@ fn start_click_through_poll(app: AppHandle) {
                 *applied = Some(want_ignore);
             }
         });
+        // run_on_main_thread errors once the event loop is gone (app quitting) → stop.
         if dispatched.is_err() {
             break;
         }
     });
 }
 
-/// Is the OS cursor within the pet's interactive circle? All maths in physical px.
+/// Is the OS cursor within the pet's interactive rect? The cursor (physical desktop coords)
+/// is converted to the window's content-local logical px and tested against the rect.
 fn cursor_over_pet(app: &AppHandle, pet: &WebviewWindow) -> bool {
-    let (Ok(cursor), Ok(pos), Ok(size)) =
-        (app.cursor_position(), pet.outer_position(), pet.inner_size())
-    else {
+    let (Ok(cursor), Ok(pos)) = (app.cursor_position(), pet.outer_position()) else {
         return false;
     };
     let scale = pet.scale_factor().unwrap_or(1.0);
-    let radius = *app.state::<Arc<PetHit>>().radius.lock().unwrap() * scale;
-    let dx = cursor.x - pos.x as f64 - size.width as f64 / 2.0;
-    let dy = cursor.y - pos.y as f64 - size.height as f64 / 2.0;
-    dx * dx + dy * dy <= radius * radius
+    let rel_x = (cursor.x - pos.x as f64) / scale;
+    let rel_y = (cursor.y - pos.y as f64) / scale;
+    let r = *app.state::<Arc<PetHit>>().rect.lock().unwrap();
+    rel_x >= r.x && rel_x <= r.x + r.w && rel_y >= r.y && rel_y <= r.y + r.h
 }

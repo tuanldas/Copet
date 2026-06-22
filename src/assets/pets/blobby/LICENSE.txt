@@ -1,0 +1,9 @@
+Original artwork — Blobby pet spritesheet
+License: CC0 1.0 Universal (Public Domain Dedication)
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Generated programmatically by scripts/gen-pet-spritesheet.mjs using pngjs (MIT).
+No third-party artwork included. All pixel data produced by the generation script.
+
+You may use, copy, modify, and distribute this asset for any purpose,
+commercial or non-commercial, without asking permission.

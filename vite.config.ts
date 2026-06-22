@@ -5,11 +5,11 @@ const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
+
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
     port: 1420,
@@ -27,4 +27,11 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+
+  // 4. Đảm bảo assets/pets/** được serve/bundle đúng.
+  //    pet-pack-loader dùng fetch() để load pet.json + spritesheet → cần file nằm trong public/.
+  //    gen-pet-spritesheet.mjs sync src/assets/pets/ → public/assets/pets/ tự động.
+  //    publicDir mặc định là "public" — khai báo tường minh cho rõ.
+  publicDir: "public",
+  assetsInclude: ["**/*.png", "**/*.webp"],
 }));
