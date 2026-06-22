@@ -1,21 +1,25 @@
 /**
- * pet-store.ts — @xstate/store single source of truth for PetData (Phase 04).
+ * pet-store.ts — @xstate/store single source of truth for PetData (Phase 04/05).
  *
- * IMPORTANT: This store holds Tamagotchi DATA (stats, xp, level, stage, tokens).
- * It is SEPARATE from src/pet/pet-state-machine.ts (animation FSM, Phase 02).
+ * IMPORTANT: This store holds Tamagotchi DATA (stats, xp, level, stage, tokens,
+ * inventory, equipped). It is SEPARATE from src/pet/pet-state-machine.ts (animation FSM).
  * Phase 07 will wire data changes → animation transitions.
  *
  * Events:
- *   SET_DATA       — full replace (used on load / offline decay)
- *   APPLY_DECAY    — decay stats + update care score + check evolution
- *   ADD_XP         — add xp (positive or negative penalty)
- *   ADD_TOKENS     — increment token count
- *   ADJUST_STAT    — feed/pet: bump a single stat + optional xp
+ *   SET_DATA          — full replace (used on load / offline decay)
+ *   APPLY_DECAY       — decay stats + update care score + check evolution
+ *   ADD_XP            — add xp (positive or negative penalty)
+ *   ADD_TOKENS        — increment token count
+ *   ADJUST_STAT       — feed/pet: bump a single stat + optional xp
+ *   SPEND_TOKENS      — deduct tokens (returns false via side-channel if insufficient)
+ *   ADD_TO_INVENTORY  — add item id to owned inventory (cosmetics only; food consumed at buy)
+ *   EQUIP_ITEM        — set equipped[slot] = itemId
+ *   UNEQUIP_SLOT      — clear equipped[slot]
  */
 
 import { createStore } from "@xstate/store";
 import { defaultPetData, Stage, todayString } from "./types.js";
-import type { PetData, Stats } from "./types.js";
+import type { PetData, Stats, CosmeticSlot } from "./types.js";
 import { applyDecay, computeDailyCareScore, hasStatAtZero } from "./stats.js";
 import { addXp } from "./xp-level.js";
 import { checkEvolution, updateCareBuffer } from "./evolution.js";
@@ -26,7 +30,11 @@ export type PetStoreEvent =
   | { type: "APPLY_DECAY"; minutes: number }
   | { type: "ADD_XP"; amount: number }
   | { type: "ADD_TOKENS"; count: number }
-  | { type: "ADJUST_STAT"; stat: keyof Stats; delta: number; xpBonus?: number };
+  | { type: "SPEND_TOKENS"; count: number }
+  | { type: "ADJUST_STAT"; stat: keyof Stats; delta: number; xpBonus?: number }
+  | { type: "ADD_TO_INVENTORY"; itemId: string }
+  | { type: "EQUIP_ITEM"; slot: CosmeticSlot; itemId: string }
+  | { type: "UNEQUIP_SLOT"; slot: CosmeticSlot };
 
 /** Create and export the store instance. */
 export const petStore = createStore({
@@ -86,6 +94,31 @@ export const petStore = createStore({
       ...context,
       tokens: context.tokens + event.count,
     }),
+
+    // SPEND_TOKENS: deduct tokens; no-op if insufficient (balance stays non-negative).
+    // economy.ts checks balance before dispatching — this is a defensive guard.
+    SPEND_TOKENS: (context: PetData, event: { type: "SPEND_TOKENS"; count: number }) => {
+      if (context.tokens < event.count) return context; // Guard: never go negative.
+      return { ...context, tokens: context.tokens - event.count };
+    },
+
+    ADD_TO_INVENTORY: (context: PetData, event: { type: "ADD_TO_INVENTORY"; itemId: string }) => ({
+      ...context,
+      inventory: context.inventory.includes(event.itemId)
+        ? context.inventory
+        : [...context.inventory, event.itemId],
+    }),
+
+    EQUIP_ITEM: (context: PetData, event: { type: "EQUIP_ITEM"; slot: CosmeticSlot; itemId: string }) => ({
+      ...context,
+      equipped: { ...context.equipped, [event.slot]: event.itemId },
+    }),
+
+    UNEQUIP_SLOT: (context: PetData, event: { type: "UNEQUIP_SLOT"; slot: CosmeticSlot }) => {
+      const equipped = { ...context.equipped };
+      delete equipped[event.slot];
+      return { ...context, equipped };
+    },
 
     ADJUST_STAT: (
       context: PetData,

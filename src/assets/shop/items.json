@@ -1,0 +1,96 @@
+{
+  "food": [
+    {
+      "id": "food_kibble",
+      "name": "Kibble",
+      "price": 5,
+      "stat": "hunger",
+      "amount": 20,
+      "emoji": "🍪",
+      "description": "Basic feed. Restores 20 hunger."
+    },
+    {
+      "id": "food_gourmet",
+      "name": "Gourmet Meal",
+      "price": 12,
+      "stat": "hunger",
+      "amount": 50,
+      "emoji": "🍱",
+      "description": "Premium meal. Restores 50 hunger."
+    },
+    {
+      "id": "food_energy_drink",
+      "name": "Energy Drink",
+      "price": 10,
+      "stat": "energy",
+      "amount": 40,
+      "emoji": "⚡",
+      "description": "Zap! Restores 40 energy."
+    },
+    {
+      "id": "food_candy",
+      "name": "Candy",
+      "price": 7,
+      "stat": "happiness",
+      "amount": 30,
+      "emoji": "🍬",
+      "description": "Sweet treat. Boosts happiness by 30."
+    },
+    {
+      "id": "food_shampoo",
+      "name": "Bubble Bath",
+      "price": 8,
+      "stat": "hygiene",
+      "amount": 35,
+      "emoji": "🛁",
+      "description": "Squeaky clean! Restores 35 hygiene."
+    }
+  ],
+  "cosmetics": [
+    {
+      "id": "cosmetic_hat_wizard",
+      "name": "Wizard Hat",
+      "price": 40,
+      "slot": "hat",
+      "overlaySprite": "/assets/shop/cosmetics/hat-wizard.png",
+      "emoji": "🧙",
+      "description": "A mystical pointed hat for the power-user pet."
+    },
+    {
+      "id": "cosmetic_hat_cap",
+      "name": "Dev Cap",
+      "price": 30,
+      "slot": "hat",
+      "overlaySprite": "/assets/shop/cosmetics/hat-cap.png",
+      "emoji": "🧢",
+      "description": "Classic developer baseball cap."
+    },
+    {
+      "id": "cosmetic_acc_glasses",
+      "name": "Nerd Glasses",
+      "price": 35,
+      "slot": "accessory",
+      "overlaySprite": "/assets/shop/cosmetics/acc-glasses.png",
+      "emoji": "🤓",
+      "description": "Oversized glasses for the intellectually inclined."
+    },
+    {
+      "id": "cosmetic_acc_bow",
+      "name": "Ribbon Bow",
+      "price": 45,
+      "slot": "accessory",
+      "overlaySprite": "/assets/shop/cosmetics/acc-bow.png",
+      "emoji": "🎀",
+      "description": "An adorable bow for fancy occasions."
+    },
+    {
+      "id": "cosmetic_hat_crown",
+      "name": "Golden Crown",
+      "price": 80,
+      "slot": "hat",
+      "overlaySprite": "/assets/shop/cosmetics/hat-crown.png",
+      "emoji": "👑",
+      "description": "For the legendary pet who earned it."
+    }
+  ]
+}

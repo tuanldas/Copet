@@ -4,12 +4,16 @@
  * PetData is the single serialized state persisted by tauri-plugin-store.
  * SCHEMA_VERSION guards migration when fields change between app releases.
  *
- * IMPORTANT: This file is owned by Phase 04. Do NOT modify fields here
+ * IMPORTANT: This file is owned by Phase 04/05. Do NOT modify fields here
  * without updating persistence.ts migration logic and SCHEMA_VERSION.
+ *
+ * Schema history:
+ *   v1 (P04): stats, xp, level, stage, tokens, careScoreBuffer, lastSavedAt, lastCareDay
+ *   v2 (P05): + inventory: string[], equipped: { hat?: string; accessory?: string }
  */
 
 /** Schema version — bump on any breaking PetData field change. */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /** Evolution stages in order. Level thresholds match STAGE_LEVELS. */
 export enum Stage {
@@ -35,6 +39,12 @@ export interface Stats {
  */
 export type CareScoreBuffer = number[];
 
+/** Cosmetic slots available for equipped items. */
+export type CosmeticSlot = "hat" | "accessory";
+
+/** Equipped cosmetic map: slot → item id (undefined = nothing equipped). */
+export type EquippedMap = Partial<Record<CosmeticSlot, string>>;
+
 /** Full pet state — persisted and managed by pet-store.ts. */
 export interface PetData {
   /** Schema version for migration guard on load. */
@@ -55,6 +65,10 @@ export interface PetData {
   lastSavedAt: number;
   /** Day string (YYYY-MM-DD) of the last care score entry to detect day rollover. */
   lastCareDay: string;
+  /** Owned item ids (food consumed on buy; cosmetics remain permanently). */
+  inventory: string[];
+  /** Currently equipped cosmetics by slot. */
+  equipped: EquippedMap;
 }
 
 /** Default initial state for new pets or schema version mismatch resets. */
@@ -74,6 +88,8 @@ export function defaultPetData(): PetData {
     careScoreBuffer: [],
     lastSavedAt: Date.now(),
     lastCareDay: todayString(),
+    inventory: [],
+    equipped: {},
   };
 }
 

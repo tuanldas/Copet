@@ -1,0 +1,12 @@
+CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
+======================================================
+
+Cosmetic overlay sprites for Copet shop (hat-wizard.png, hat-cap.png,
+acc-glasses.png, acc-bow.png, hat-crown.png).
+
+These files were procedurally generated (pixel art) specifically for this
+project and are released under CC0. You may use, copy, modify, distribute,
+and perform these works, even for commercial purposes, all without asking
+permission.
+
+For more information, see: https://creativecommons.org/publicdomain/zero/1.0/

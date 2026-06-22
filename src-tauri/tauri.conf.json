@@ -27,6 +27,20 @@
         "focus": false,
         "acceptFirstMouse": true,
         "visibleOnAllWorkspaces": true
+      },
+      {
+        "label": "shop",
+        "title": "Copet Shop",
+        "url": "shop.html",
+        "width": 400,
+        "height": 520,
+        "transparent": false,
+        "decorations": true,
+        "alwaysOnTop": false,
+        "skipTaskbar": false,
+        "resizable": true,
+        "visible": false,
+        "focus": true
       }
     ],
     "security": {

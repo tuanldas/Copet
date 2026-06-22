@@ -63,7 +63,7 @@ fn init_plugins(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Window setup: macOS accessory policy + transparent-overlay click-through.
+/// Window setup: macOS accessory policy + transparent-overlay click-through + shop window.
 fn init_windows(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     // macOS: live as an accessory overlay — no Dock icon, no Cmd+Tab, never steal focus.
     #[cfg(target_os = "macos")]
@@ -77,6 +77,29 @@ fn init_windows(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     pet.set_ignore_cursor_events(true)?;
     start_click_through_poll(app.handle().clone());
 
+    // Shop window is declared in tauri.conf.json with visible:false (hidden in prod).
+    // In debug builds, show it immediately so the controller can verify UI without
+    // manually opening it via tray (P06 will wire the tray "Open Shop" action).
+    init_shop_window(app)?;
+
+    Ok(())
+}
+
+/// Initialise the shop window. In debug builds, show it for visual verification.
+/// In release builds it stays hidden until opened via tray (Phase 06).
+fn init_shop_window(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
+    let shop = app
+        .get_webview_window("shop")
+        .ok_or("shop window not found in tauri.conf.json — check windows array")?;
+
+    #[cfg(debug_assertions)]
+    {
+        shop.show()?;
+        shop.set_focus()?;
+    }
+
+    // In release the window exists but is hidden; P06 tray action calls show().
+    let _ = shop; // suppress unused warning in release
     Ok(())
 }
 

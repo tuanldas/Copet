@@ -22,6 +22,8 @@ import { AnimationController } from "./animation-controller.js";
 import { RenderLoop } from "./render-loop.js";
 import { petStore, getPetState, TRANSIENT_STATES } from "./pet-state-machine.js";
 import type { AnimResolution } from "./animation-controller.js";
+import { onPetDataChange, getPetData } from "../tamagotchi/pet-store.js";
+import { findItem } from "../economy/item-catalog.js";
 
 /** Kích thước hiển thị pet trên canvas (logical px) — scale từ 192×208 xuống */
 const PET_DISPLAY_WIDTH = 96;
@@ -74,7 +76,20 @@ export async function mountPet(canvas: HTMLCanvasElement): Promise<() => void> {
     });
   };
 
-  // ── 3. Render loop ────────────────────────────────────────────────────────
+  // ── 3. Cosmetic overlay cache ─────────────────────────────────────────────
+  // Pre-load overlay images keyed by URL so drawImage doesn't re-fetch per frame.
+  const overlayCache = new Map<string, HTMLImageElement>();
+
+  function getOverlayImage(url: string): HTMLImageElement | null {
+    if (overlayCache.has(url)) return overlayCache.get(url)!;
+    const img = new Image();
+    img.src = url;
+    img.decoding = "async";
+    overlayCache.set(url, img);
+    return img.complete ? img : null; // Return null until fully decoded.
+  }
+
+  // ── 4. Render loop ────────────────────────────────────────────────────────
   const loop = new RenderLoop(
     { petWidth: PET_DISPLAY_WIDTH, petHeight: PET_DISPLAY_HEIGHT, canvas },
     animCtrl.resolve(getPetState()),
@@ -88,9 +103,49 @@ export async function mountPet(canvas: HTMLCanvasElement): Promise<() => void> {
         destWidth: PET_DISPLAY_WIDTH,
         destHeight: PET_DISPLAY_HEIGHT,
       });
+
+      // Draw cosmetic overlays after the pet sprite (same dest rect).
+      drawCosmeticOverlays(ctx, position.x, position.y);
+
       reportHitRect(position, timestamp);
     }
   );
+
+  /**
+   * Draw equipped cosmetic overlays onto the canvas context.
+   * Overlays use the same destX/destY/size as the pet sprite so they align.
+   * Called inside the render callback — no allocations per frame (cache lookup only).
+   */
+  function drawCosmeticOverlays(
+    context: CanvasRenderingContext2D,
+    destX: number,
+    destY: number,
+  ): void {
+    const { equipped } = getPetData();
+    const slotIds = [equipped.hat, equipped.accessory].filter(Boolean) as string[];
+
+    for (const itemId of slotIds) {
+      const catalogItem = findItem(itemId);
+      if (!catalogItem || catalogItem.kind !== "cosmetic") continue;
+      const img = getOverlayImage(catalogItem.overlaySprite);
+      if (!img) continue; // Not yet decoded — skip this frame, shows next.
+      context.drawImage(img, destX, destY, PET_DISPLAY_WIDTH, PET_DISPLAY_HEIGHT);
+    }
+  }
+
+  // ── 5. Cosmetics subscription — force overlay redraw on equip/unequip ─────
+  // When PetData.equipped changes the next render frame will pick it up via
+  // getPetData() inside drawCosmeticOverlays(). The subscription here pre-warms
+  // the image cache so the overlay appears without a 1-frame blank gap.
+  const unsubCosmetics = onPetDataChange((data) => {
+    const slotIds = [data.equipped.hat, data.equipped.accessory].filter(Boolean) as string[];
+    for (const itemId of slotIds) {
+      const catalogItem = findItem(itemId);
+      if (catalogItem?.kind === "cosmetic") {
+        getOverlayImage(catalogItem.overlaySprite); // warms cache
+      }
+    }
+  });
 
   // ── 4. Transient state auto-revert [Fix #1: stuck states] ────────────────
   // Khi vào transient state, hẹn ANIM_DONE = (frames/fps * 1000) ms.
@@ -188,6 +243,7 @@ export async function mountPet(canvas: HTMLCanvasElement): Promise<() => void> {
   const cleanup = (): void => {
     loop.stop();
     subscription.unsubscribe();
+    unsubCosmetics();
     clearInterval(tickInterval);
     clearTimeout(animDoneTimer);
     if (devCycleTimer) clearInterval(devCycleTimer);
@@ -196,6 +252,7 @@ export async function mountPet(canvas: HTMLCanvasElement): Promise<() => void> {
     window.removeEventListener("mouseup", onMouseUp);
     window.removeEventListener("blur", onWindowBlur);
     canvas.removeEventListener("mousedown", onMouseDown);
+    overlayCache.clear();
   };
 
   window.addEventListener("beforeunload", cleanup, { once: true });

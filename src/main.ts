@@ -18,6 +18,7 @@ mountPet(canvas).catch((err: unknown) => {
 });
 
 // Vòng đời Tamagotchi: load state → offline decay → tick (60s) + auto-save.
-initTamagotchi().catch((err: unknown) => {
+// role "owner": pet window is the single writer for copet-pet.json.
+initTamagotchi({ role: "owner" }).catch((err: unknown) => {
   console.error("[Copet] initTamagotchi thất bại:", err);
 });

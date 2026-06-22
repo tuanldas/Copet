@@ -14,6 +14,10 @@
     "isolatedModules": true,
     "noEmit": true,
 
+    /* JSX — SolidJS (vite-plugin-solid handles transform; tsc only type-checks) */
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
+
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,
