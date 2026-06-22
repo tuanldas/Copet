@@ -12,6 +12,8 @@ use std::time::Duration;
 
 use tauri::{App, AppHandle, Manager, WebviewWindow};
 
+mod ipc;
+
 /// The pet's interactive rect in logical px, relative to the pet window's content top-left.
 /// The frontend reports it (and updates it as the pet moves) via `set_pet_hit_rect` so the
 /// click-through hit-test tracks wherever the pet actually is, not a fixed centre.
@@ -77,8 +79,13 @@ fn init_windows(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Agent-event IPC socket daemon. Filled in Phase 03.
-fn init_ipc(_app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
+/// Agent-event IPC socket daemon (Phase 03).
+///
+/// Spawns an async tokio task that listens on the platform local socket
+/// (`/tmp/copet-{uid}.sock` on Unix) and emits `agent-status-changed` Tauri
+/// events to the webview whenever copet-hook or copet-run writes a JSON line.
+fn init_ipc(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
+    ipc::spawn_daemon(app.handle().clone());
     Ok(())
 }
 
