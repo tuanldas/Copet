@@ -15,6 +15,7 @@
 
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
+import { openHud } from "../ui/shared/tauri-commands.js";
 
 import { loadPetPack } from "./pet-pack-loader.js";
 import { SpritePlayer } from "./sprite-player.js";
@@ -202,6 +203,19 @@ export async function mountPet(canvas: HTMLCanvasElement): Promise<() => void> {
   };
   window.addEventListener("mouseup", onMouseUp);
 
+  // ── Phase 06: right-click on pet canvas → open HUD ───────────────────────
+  // Only fires when cursor is over the pet body (click-through already allows
+  // events at that position). preventDefault stops the native context menu.
+  const onContextMenu = (e: Event): void => {
+    e.preventDefault();
+    const me = e as MouseEvent;
+    if (!isPointerOnPet(me, canvas, loop.position)) return;
+    openHud().catch((err: unknown) => {
+      console.warn("[mountPet] openHud failed:", err);
+    });
+  };
+  canvas.addEventListener("contextmenu", onContextMenu);
+
   // ── 7. Safety DRAG_END khi blur [Fix #2: drag kẹt sau startDragging] ─────
   // Tauri webview có thể không nhận mouseup sau startDragging() (tauri#10767).
   // window.blur là fallback sync; onFocusChanged là Tauri-native nếu available.
@@ -252,6 +266,7 @@ export async function mountPet(canvas: HTMLCanvasElement): Promise<() => void> {
     window.removeEventListener("mouseup", onMouseUp);
     window.removeEventListener("blur", onWindowBlur);
     canvas.removeEventListener("mousedown", onMouseDown);
+    canvas.removeEventListener("contextmenu", onContextMenu);
     overlayCache.clear();
   };
 

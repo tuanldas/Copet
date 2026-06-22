@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { xpPerLevel, levelFromXp, addXp, xpWithinLevel } from "../xp-level.js";
+import { xpPerLevel, levelFromXp, addXp, xpWithinLevel, xpForCurrentLevel } from "../xp-level.js";
 import { defaultPetData } from "../types.js";
 
 describe("xpPerLevel", () => {
@@ -117,5 +117,35 @@ describe("xpWithinLevel", () => {
     // level 0 costs 100, level 1 costs 150. At 175 xp: 175-100=75 remaining,
     // 75 < 150 so still level 1 with 75 within.
     expect(xpWithinLevel(175)).toBe(75);
+  });
+});
+
+describe("xpForCurrentLevel", () => {
+  it("returns 100 at 0 XP (level 0 threshold)", () => {
+    // Level 0 needs xpPerLevel(0) = 100 to level up.
+    expect(xpForCurrentLevel(0)).toBe(100);
+  });
+
+  it("returns 100 at 99 XP (still level 0)", () => {
+    expect(xpForCurrentLevel(99)).toBe(100);
+  });
+
+  it("returns 150 at exactly 100 XP (now level 1, threshold = xpPerLevel(1))", () => {
+    // At 100 XP player is level 1; level 1 needs xpPerLevel(1) = 150 to level up.
+    expect(xpForCurrentLevel(100)).toBe(150);
+  });
+
+  it("HUD ring: xpWithinLevel / xpForCurrentLevel gives correct fraction at level 0, 50 XP", () => {
+    // 50/100 = 0.5 — ring should be half filled.
+    const within = xpWithinLevel(50);
+    const needed = xpForCurrentLevel(50);
+    expect(within / needed).toBeCloseTo(0.5);
+  });
+
+  it("HUD ring: progress resets to 0 on level-up (100 XP → level 1, 0 within)", () => {
+    const within = xpWithinLevel(100);
+    const needed = xpForCurrentLevel(100);
+    expect(within).toBe(0);
+    expect(needed).toBe(150);
   });
 });

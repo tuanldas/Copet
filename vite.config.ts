@@ -37,6 +37,8 @@ export default defineConfig(async () => ({
       input: {
         main: "index.html",
         shop: "shop.html",
+        hud: "hud.html",
+        settings: "settings.html",
       },
     },
   },

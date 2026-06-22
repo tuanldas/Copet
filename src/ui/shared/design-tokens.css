@@ -1,0 +1,134 @@
+/*
+ * design-tokens.css — Copet shared design system (Phase 06).
+ * Source: docs/design-guidelines.md
+ *
+ * Import in HUD, Settings, and Shop CSS to share the same palette,
+ * typography, spacing, and radius scales.
+ *
+ * @import '../shared/design-tokens.css';
+ */
+
+/* ── Google Fonts ────────────────────────────────────────────────────────────
+   Pixelify Sans  → headers / display / numbers
+   Nunito         → body / UI labels
+   JetBrains Mono → mono (agent name / tool / log)                           */
+@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=Nunito:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* ── Agent-state accent colours ──────────────────────────────────────────
+     Used for status dots, glow, and stat-bar colour transitions.            */
+  --color-state-working: #3B82F6;   /* blue  — focused / typing             */
+  --color-state-waiting: #F59E0B;   /* amber — needs user input             */
+  --color-state-done:    #22C55E;   /* green — task succeeded               */
+  --color-state-error:   #EF4444;   /* red   — task failed                  */
+  --color-state-idle:    #94A3B8;   /* slate — no active session            */
+
+  /* ── Stat bar threshold colours ──────────────────────────────────────────
+     green (≥60) → amber (30-59) → red (<30)                                */
+  --color-stat-high:   #22C55E;
+  --color-stat-medium: #F59E0B;
+  --color-stat-low:    #EF4444;
+
+  /* ── UI surface — dark theme (default) ───────────────────────────────────*/
+  --color-bg:            #1E1E2E;
+  --color-surface:       #2A2A3C;
+  --color-text-primary:  #ECECF4;
+  --color-text-muted:    #A0A0B8;
+  --color-border:        rgba(255, 255, 255, 0.08);
+  --color-accent:        #8B5CF6;   /* violet — brand / buttons / currency  */
+
+  /* ── Typography ──────────────────────────────────────────────────────────*/
+  --font-display: 'Pixelify Sans', monospace;
+  --font-body:    'Nunito', sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+
+  --font-size-xs:   11px;
+  --font-size-sm:   12px;
+  --font-size-base: 13px;
+  --font-size-md:   14px;
+  --font-size-lg:   16px;
+  --font-size-xl:   20px;
+
+  /* ── Spacing scale (px) ──────────────────────────────────────────────────*/
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-6:  24px;
+  --space-8:  32px;
+
+  /* ── Border-radius scale (px) ────────────────────────────────────────────*/
+  --radius-sm:  6px;
+  --radius-md:  8px;
+  --radius-lg:  12px;
+  --radius-xl:  16px;
+
+  /* ── Shadows ─────────────────────────────────────────────────────────────
+     Panels are opaque cards (no backdrop-filter on transparent windows).   */
+  --shadow-panel: 0 8px 32px rgba(0, 0, 0, 0.48);
+  --shadow-card:  0 2px 8px  rgba(0, 0, 0, 0.32);
+
+  /* ── Motion ──────────────────────────────────────────────────────────────*/
+  --duration-fast:   150ms;
+  --duration-normal: 250ms;
+  --ease-out:        cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Reduced-motion: honour OS setting + app toggle (set via JS class on :root) */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast:   0ms;
+    --duration-normal: 0ms;
+  }
+}
+:root.reduced-motion {
+  --duration-fast:   0ms;
+  --duration-normal: 0ms;
+}
+
+/* ── Base reset ──────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Utility: stat-bar colour helper ─────────────────────────────────────── */
+/* JS sets --stat-value (0-100) as a CSS custom property on the bar element. */
+/* Use: background-color: var(--stat-bar-color) on the fill element.         */
+.stat-bar-fill {
+  background-color: var(--color-stat-high);
+  transition: width var(--duration-normal) var(--ease-out),
+              background-color var(--duration-normal) var(--ease-out);
+}
+.stat-bar-fill.medium { background-color: var(--color-stat-medium); }
+.stat-bar-fill.low    { background-color: var(--color-stat-low); }
+
+/* ── Utility: button base ────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;               /* accessibility hit target ≥32px          */
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn--primary { background: var(--color-accent); color: #fff; }
+.btn--ghost   { background: transparent; color: var(--color-text-primary); border: 1px solid var(--color-border); }
+.btn--primary:not(:disabled):hover { opacity: 0.88; }
+.btn--ghost:not(:disabled):hover   { background: var(--color-surface); }

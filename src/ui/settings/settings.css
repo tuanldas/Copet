@@ -1,0 +1,177 @@
+/*
+ * settings.css — Copet Settings window styles (Phase 06).
+ */
+
+@import '../shared/design-tokens.css';
+
+/* ── Root ───────────────────────────────────────────────────────────────── */
+#settings-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--color-bg);
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.settings-header {
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.settings-title {
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+/* ── Body ───────────────────────────────────────────────────────────────── */
+.settings-body {
+  padding: var(--space-4) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  overflow-y: auto;
+}
+
+/* ── Section ────────────────────────────────────────────────────────────── */
+.settings-section {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.settings-section:last-child {
+  border-bottom: none;
+}
+
+.settings-section-title {
+  font-family: var(--font-body);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: var(--space-2);
+}
+
+.settings-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-2);
+  line-height: 1.5;
+}
+
+/* ── Row layouts ────────────────────────────────────────────────────────── */
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings-row--between {
+  justify-content: space-between;
+}
+
+.settings-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+/* ── Text input ─────────────────────────────────────────────────────────── */
+.settings-input {
+  flex: 1;
+  height: 32px;
+  padding: 0 var(--space-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+.settings-input:focus {
+  border-color: var(--color-accent);
+}
+
+/* ── Status feedback ────────────────────────────────────────────────────── */
+.settings-status {
+  margin-top: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-state-done);
+}
+.settings-status:empty { display: none; }
+
+/* ── Toggle switch ──────────────────────────────────────────────────────── */
+.toggle {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--duration-normal) var(--ease-out),
+              border-color var(--duration-normal) var(--ease-out);
+}
+.toggle--on {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+.toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: var(--color-text-muted);
+  border-radius: 50%;
+  transition: transform var(--duration-normal) var(--ease-out),
+              background var(--duration-normal) var(--ease-out);
+}
+.toggle--on .toggle-thumb {
+  transform: translateX(18px);
+  background: #fff;
+}
+
+/* ── Pet select ─────────────────────────────────────────────────────────── */
+.pet-select-row {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.pet-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  width: 72px;
+  padding: var(--space-2);
+  background: var(--color-surface);
+  border: 2px solid transparent;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+.pet-option--selected {
+  border-color: var(--color-accent);
+}
+.pet-option--locked {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.pet-option-emoji {
+  font-size: 28px;
+  line-height: 1;
+}
+.pet-option-name {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
