@@ -20,7 +20,7 @@ MVP-first. Stack đã chốt (xem `docs/tech-stack.md`). Phase 1 là gate rủi 
 | 01 | scaffold-and-transparent-overlay-poc | Scaffold Tauri v2 + Vite/TS/pnpm + PoC pet window trong suốt, always-on-top, click-through | 2.5d | ✅ done |
 | 02 | pet-rendering-engine | Canvas 2D sprite player + Petdex pet-pack loader + @xstate/store + base anim (idle/walk/drag) | 4d | ✅ done |
 | 03 | agent-integration-backend | `interprocess` socket daemon + sidecar `copet-hook` + event mapping + emit; hook Claude/Codex/Gemini + `copet run` wrapper | 5d | ✅ done |
-| 04 | tamagotchi-core | Stats decay, XP/level, evolution gate, offline handling, persistence (tauri-plugin-store) | 3d | pending |
+| 04 | tamagotchi-core | Stats decay, XP/level, evolution gate, offline handling, persistence (tauri-plugin-store) | 3d | ✅ done |
 | 05 | token-economy-and-shop | Token từ activity + Shop UI (food + cosmetics) + buy/equip | 2.5d | pending |
 | 06 | ui-shell-and-system-integration | Stats HUD, Settings, tray menu, global shortcut, autostart, notification, positioner/window-state | 3d | pending |
 | 07 | wire-agent-state-to-pet-reaction | Nối agent event → pet animation/mood/tooltip + xử lý multi-session | 2d | pending |

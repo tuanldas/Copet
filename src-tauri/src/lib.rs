@@ -57,8 +57,9 @@ fn set_pet_hit_rect(state: tauri::State<'_, Arc<PetHit>>, x: f64, y: f64, w: f64
     }
 }
 
-/// Runtime plugin initialization. Filled in Phase 06.
-fn init_plugins(_app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
+/// Runtime plugin initialization. tauri-plugin-store added in Phase 04.
+fn init_plugins(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
+    app.handle().plugin(tauri_plugin_store::Builder::new().build())?;
     Ok(())
 }
 
