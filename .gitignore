@@ -1,6 +1,10 @@
 # Rust build output (workspace root target — avoids committing huge build dir)
 /target
 
+# Sidecar binaries — built locally via scripts/build-sidecars.sh, not committed.
+# CI rebuilds them per-platform in build-release.yml before tauri build.
+/src-tauri/binaries/
+
 # Logs
 logs
 *.log

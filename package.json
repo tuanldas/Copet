@@ -10,7 +10,9 @@
     "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest",
-    "gen:spritesheet": "node scripts/gen-pet-spritesheet.mjs"
+    "gen:spritesheet": "node scripts/gen-pet-spritesheet.mjs",
+    "build:mac": "tauri build --bundles dmg,app",
+    "build:sidecars": "bash scripts/build-sidecars.sh"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

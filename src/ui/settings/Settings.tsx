@@ -21,6 +21,10 @@ import {
   selectPet,
   getSettings,
   resetPetPosition,
+  installHook,
+  uninstallHook,
+  hookStatus,
+  type HookAgent,
 } from "../shared/tauri-commands.js";
 
 // ── Local storage key for reduced-motion preference ──────────────────────────
@@ -92,6 +96,50 @@ const Settings: Component = () => {
     applyReducedMotion(next);
   }
 
+  // ── Hook install (Phase 08) ─────────────────────────────────────────────────
+  // Per-agent installed state + busy flag + status message.
+  const HOOK_AGENTS: HookAgent[] = ["claude", "codex", "gemini"];
+  const [hookInstalled, setHookInstalled] = createSignal<Record<HookAgent, boolean>>({
+    claude: false,
+    codex: false,
+    gemini: false,
+  });
+  const [hookBusy, setHookBusy] = createSignal<Record<HookAgent, boolean>>({
+    claude: false,
+    codex: false,
+    gemini: false,
+  });
+  const [hookMsg, setHookMsg] = createSignal("");
+
+  async function refreshHookStatus(): Promise<void> {
+    const results = await Promise.all(
+      HOOK_AGENTS.map((a) => hookStatus(a).catch(() => false)),
+    );
+    const next: Record<HookAgent, boolean> = { claude: false, codex: false, gemini: false };
+    HOOK_AGENTS.forEach((a, i) => { next[a] = results[i] as boolean; });
+    setHookInstalled(next);
+  }
+
+  async function handleHookToggle(agent: HookAgent): Promise<void> {
+    setHookBusy({ ...hookBusy(), [agent]: true });
+    setHookMsg("");
+    try {
+      if (hookInstalled()[agent]) {
+        const msg = await uninstallHook(agent);
+        setHookMsg(msg);
+      } else {
+        const msg = await installHook(agent);
+        setHookMsg(msg);
+      }
+      await refreshHookStatus();
+    } catch (e) {
+      setHookMsg(`Error: ${String(e)}`);
+    } finally {
+      setHookBusy({ ...hookBusy(), [agent]: false });
+      setTimeout(() => setHookMsg(""), 4000);
+    }
+  }
+
   // ── Position reset ──────────────────────────────────────────────────────────
   const [posStatus, setPosStatus] = createSignal("");
 
@@ -131,6 +179,9 @@ const Settings: Component = () => {
     const rm = getStoredReducedMotion();
     setReducedMotion(rm);
     applyReducedMotion(rm);
+
+    // Hook install status (Phase 08).
+    await refreshHookStatus().catch(() => {});
   });
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -219,6 +270,38 @@ const Settings: Component = () => {
               <span class="toggle-thumb" />
             </button>
           </div>
+        </section>
+
+        {/* ── Install hooks (Phase 08) ─────────────────────────────────────── */}
+        <section class="settings-section" aria-labelledby="sec-hooks">
+          <h2 id="sec-hooks" class="settings-section-title">Agent Hooks</h2>
+          <p class="settings-hint">
+            Connect Copet to your AI coding agents so the pet reacts to their activity.
+          </p>
+          {HOOK_AGENTS.map((agent) => {
+            const installed = () => hookInstalled()[agent];
+            const busy = () => hookBusy()[agent];
+            const label = agent.charAt(0).toUpperCase() + agent.slice(1);
+            return (
+              <div class="settings-row settings-row--between" style="margin-bottom:6px">
+                <span class="settings-label">
+                  {label}
+                  {installed() && <span class="hook-badge"> installed</span>}
+                </span>
+                <button
+                  class={`btn ${installed() ? "btn--ghost" : "btn--primary"}`}
+                  disabled={busy()}
+                  onClick={() => handleHookToggle(agent)}
+                  aria-label={`${installed() ? "Uninstall" : "Install"} ${label} hook`}
+                >
+                  {busy() ? "…" : installed() ? "Uninstall" : "Install"}
+                </button>
+              </div>
+            );
+          })}
+          <Show when={hookMsg()}>
+            <p class="settings-status">{hookMsg()}</p>
+          </Show>
         </section>
 
         {/* ── Pet position reset ───────────────────────────────────────────── */}

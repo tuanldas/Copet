@@ -57,6 +57,10 @@ pub fn run() {
             commands::system_commands::get_settings,
             // Phase 07: agent state → tray icon
             commands::system_commands::set_tray_state,
+            // Phase 08: hook install/uninstall/status
+            commands::install_commands::install_hook,
+            commands::install_commands::uninstall_hook,
+            commands::install_commands::hook_status,
         ])
         .setup(|app| {
             init_plugins(app)?;

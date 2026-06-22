@@ -1,36 +1,52 @@
-# Copet 🐾
+# Copet
 
-Desktop pet (Tauri v2) phản ứng theo trạng thái AI coding agent của bạn — Claude Code, Codex, Gemini CLI, Cursor… — kèm gamification kiểu Tamagotchi (nuôi, tiến hoá, shop).
+Desktop pet (Tauri v2) that reacts to your AI coding agent's state — Claude Code, Codex, Gemini CLI, Cursor… — with Tamagotchi-style gamification (feed, evolve, shop).
 
-> **Trạng thái:** đang phát triển — Phase 01 (scaffold + transparent overlay PoC).
+> **Status: MVP complete** — all 8 phases shipped. Pet overlay, agent reactions, Tamagotchi stats, token economy, shop, HUD, Settings, tray, and packaging.
 
-## Yêu cầu
-- Node ≥ 20, pnpm ≥ 9
-- Rust (stable) + Cargo
-- macOS 13+ (mục tiêu MVP). Windows / Linux: best-effort.
+## Install
 
-## Phát triển
+See [docs/installation-guide.md](docs/installation-guide.md) for:
+- Opening the DMG and bypassing Gatekeeper (unsigned MVP build).
+- Installing agent hooks (Claude / Codex / Gemini) via the Settings UI or CLI script.
+- Troubleshooting PATH, socket, and permission issues.
+
+## Build
+
 ```bash
 pnpm install
-pnpm tauri dev        # mở pet overlay (dev, hot-reload)
-pnpm tauri build      # đóng gói app
+bash scripts/build-sidecars.sh   # build copet-hook + copet-run for host triple
+pnpm build:mac                   # → src-tauri/target/release/bundle/dmg/Copet_*.dmg
 ```
 
-## Kiểm thử nhanh
+See [docs/distribution-and-signing.md](docs/distribution-and-signing.md) for:
+- Windows / Linux build commands.
+- macOS signing + notarization env vars (Apple Developer ID).
+- Windows OV cert / Azure Key Vault signing.
+- CI matrix build via GitHub Actions.
+
+## Development
+
 ```bash
-pnpm exec tsc --noEmit                              # typecheck frontend
-cargo clippy --manifest-path src-tauri/Cargo.toml  # compile + lint Rust
+pnpm tauri dev        # hot-reload dev build (pet overlay + all windows)
+pnpm test             # vitest unit tests
+pnpm exec tsc --noEmit                 # frontend typecheck
+cargo check --workspace                # Rust compile check
+cargo clippy --workspace               # Rust lint
 ```
 
-## Cấu trúc
-- `index.html`, `src/` — frontend. Pet render: Canvas 2D (vanilla TS); UI panels (HUD/Settings/Shop): SolidJS (phase sau).
-- `src-tauri/` — Rust core. `setup()` tách `init_plugins / init_windows / init_ipc / init_tray` cho từng phase.
-- `docs/` — `tech-stack.md`, `design-guidelines.md`.
-- `plans/260622-1501-copet-desktop-agent-pet/` — kế hoạch 8 phase + research reports.
+## Requirements
 
-## Phase 01 — Transparent overlay PoC
-Pet là window trong suốt, always-on-top, không viền, ẩn khỏi Dock (macOS `Accessory`), không steal focus.
-- Giữ chuột **trên thân pet** → kéo di chuyển pet.
-- Click **vùng trong suốt** → xuyên xuống app phía dưới.
+- Node >= 20, pnpm >= 9
+- Rust stable + Cargo
+- macOS 13+ (primary target). Windows / Linux: built via CI, best-effort overlay behavior.
 
-Mục tiêu PoC: kiểm chứng rủi ro click-through (Tauri #13070) trước khi build engine.
+## Structure
+
+- `index.html`, `src/` — frontend. Pet render: Canvas 2D; UI panels (HUD/Settings/Shop): SolidJS.
+- `src-tauri/` — Rust core. `setup()` split into `init_plugins / init_windows / init_ipc / init_tray`.
+- `crates/copet-hook` — sidecar binary: maps agent hook events to Copet socket.
+- `crates/copet-run` — sidecar binary: universal agent wrapper (`copet-run -- claude ...`).
+- `scripts/` — `build-sidecars.sh`, `install-hooks.sh`, `install-hooks.ps1`.
+- `docs/` — [installation-guide.md](docs/installation-guide.md), [distribution-and-signing.md](docs/distribution-and-signing.md), [agent-hook-setup.md](docs/agent-hook-setup.md).
+- `plans/260622-1501-copet-desktop-agent-pet/` — 8-phase plan + research reports.

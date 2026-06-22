@@ -5,3 +5,4 @@
 
 pub mod window_commands;
 pub mod system_commands;
+pub mod install_commands; // Phase 08: hook install/uninstall/status

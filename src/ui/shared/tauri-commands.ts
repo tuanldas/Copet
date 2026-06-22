@@ -82,6 +82,38 @@ export function getSettings(): Promise<PersistedSettings> {
   return invoke("get_settings");
 }
 
+// ── Hook install commands (Phase 08) ──────────────────────────────────────────
+
+/** Valid agent identifiers for hook install/uninstall. */
+export type HookAgent = "claude" | "codex" | "gemini";
+
+/**
+ * Install copet-hook for the given agent.
+ * Copies the sidecar binary to ~/.copet/bin and patches the agent config.
+ * Idempotent: safe to call multiple times.
+ * Returns a human-readable success message.
+ */
+export function installHook(agent: HookAgent): Promise<string> {
+  return invoke("install_hook", { agent });
+}
+
+/**
+ * Uninstall copet-hook for the given agent.
+ * Restores the .bak backup of the agent config file.
+ * Returns a human-readable success message.
+ */
+export function uninstallHook(agent: HookAgent): Promise<string> {
+  return invoke("uninstall_hook", { agent });
+}
+
+/**
+ * Check whether copet-hook is already installed for the given agent.
+ * Returns true if the hook command entry is present in the config file.
+ */
+export function hookStatus(agent: HookAgent): Promise<boolean> {
+  return invoke("hook_status", { agent });
+}
+
 // ── Notification helper ────────────────────────────────────────────────────────
 
 /**

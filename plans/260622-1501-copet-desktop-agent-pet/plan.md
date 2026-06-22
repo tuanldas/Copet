@@ -1,7 +1,7 @@
 ---
 title: "Copet — Desktop AI-Agent Pet (Tauri v2 + Tamagotchi)"
 description: "Cross-platform desktop pet phản ứng theo AI coding agent, full Tamagotchi gamification + shop."
-status: in_progress
+status: completed
 priority: P2
 effort: ~22d
 branch: main
@@ -24,7 +24,7 @@ MVP-first. Stack đã chốt (xem `docs/tech-stack.md`). Phase 1 là gate rủi 
 | 05 | token-economy-and-shop | Token từ activity + Shop UI (food + cosmetics) + buy/equip | 2.5d | ✅ done |
 | 06 | ui-shell-and-system-integration | Stats HUD, Settings, tray menu, global shortcut, autostart, notification, positioner/window-state | 3d | ✅ done |
 | 07 | wire-agent-state-to-pet-reaction | Nối agent event → pet animation/mood/tooltip + xử lý multi-session | 2d | ✅ done |
-| 08 | packaging-and-distribution | Build dmg/msi/nsis/appimage/deb + hook install flow + signing notes | 2d | pending |
+| 08 | packaging-and-distribution | Build dmg/msi/nsis/appimage/deb + hook install flow + signing notes | 2d | ✅ done |
 
 ## Dependency graph
 
