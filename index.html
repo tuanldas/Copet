@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Copet</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+  <body>
+    <!--
+      Phase 01 PoC — transparent overlay contract:
+      opaque pixels (the drawn pet) capture clicks (drag the window);
+      transparent pixels should pass clicks through to the app underneath.
+      Swapped for the real sprite renderer in Phase 02.
+    -->
+    <canvas id="pet-canvas"></canvas>
+  </body>
+</html>
