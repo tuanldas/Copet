@@ -31,6 +31,11 @@ export function togglePet(): Promise<void> {
   return invoke("toggle_pet");
 }
 
+/** Quit the whole app (popover footer "Quit"). */
+export function quitApp(): Promise<void> {
+  return invoke("quit_app");
+}
+
 /**
  * Snap the PET window (label "pet") to the BottomRight corner.
  * Rust-side acts on the pet window — safe to call from any window.

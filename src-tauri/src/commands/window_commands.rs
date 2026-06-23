@@ -33,6 +33,13 @@ pub fn toggle_pet(app: AppHandle) {
     toggle_pet_window(&app);
 }
 
+/// Quit the whole app (popover footer "Quit"). Plugins (store / window-state)
+/// flush on exit, so this is safe to call directly.
+#[tauri::command]
+pub fn quit_app(app: AppHandle) {
+    app.exit(0);
+}
+
 /// Snap the PET window to the BottomRight corner of the current monitor.
 ///
 /// This command acts on window label "pet", NOT on the caller's window.

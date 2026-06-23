@@ -49,6 +49,7 @@ pub fn run() {
             commands::window_commands::open_shop,
             commands::window_commands::toggle_pet,
             commands::window_commands::reset_pet_position,
+            commands::window_commands::quit_app,
             // Phase 06: system commands
             commands::system_commands::enable_autostart,
             commands::system_commands::is_autostart_enabled,
