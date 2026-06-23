@@ -46,6 +46,10 @@ fn main() -> ExitCode {
         state: State::Working,
         tool: Some(cmd.clone()),
         project: project.clone(),
+        tool_input: None,
+        cwd_full: None,
+        message: None,
+        prompt: None,
         ts: unix_now(),
     });
 
@@ -69,6 +73,10 @@ fn main() -> ExitCode {
                 state: State::Error,
                 tool: None,
                 project,
+                tool_input: None,
+                cwd_full: None,
+                message: None,
+                prompt: None,
                 ts: unix_now(),
             });
             return ExitCode::FAILURE;
@@ -90,6 +98,10 @@ fn main() -> ExitCode {
         state: final_state,
         tool: None,
         project,
+        tool_input: None,
+        cwd_full: None,
+        message: None,
+        prompt: None,
         ts: unix_now(),
     });
 

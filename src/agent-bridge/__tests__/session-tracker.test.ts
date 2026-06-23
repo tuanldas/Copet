@@ -234,4 +234,36 @@ describe("SessionTracker — list()", () => {
     t.expireStale(NOW_MS, 300_000);
     expect(t.list().map((s) => s.sessionId)).toEqual(["fresh"]);
   });
+
+  it("stores the active tool (null by default)", () => {
+    const t = new SessionTracker();
+    t.update("a", "working", NOW_S, "claude-code", "p", "Bash");
+    t.update("b", "done", NOW_S, "claude-code", "p");
+    expect(t.list().find((s) => s.sessionId === "a")?.tool).toBe("Bash");
+    expect(t.list().find((s) => s.sessionId === "b")?.tool).toBeNull();
+  });
+
+  it("stores enrichment fields from the info arg", () => {
+    const t = new SessionTracker();
+    t.update("a", "working", NOW_S, "claude-code", "proj", "Bash", {
+      toolInput: "pnpm test",
+      cwdFull: "/Users/dev/proj",
+      prompt: "run the tests",
+    });
+    const s = t.list()[0];
+    expect(s.toolInput).toBe("pnpm test");
+    expect(s.cwdFull).toBe("/Users/dev/proj");
+    expect(s.prompt).toBe("run the tests");
+    expect(s.message).toBeNull(); // omitted from info → null
+  });
+
+  it("enrichment fields default to null when info arg is omitted", () => {
+    const t = new SessionTracker();
+    t.update("a", "working", NOW_S, "claude-code", "proj", "Bash");
+    const s = t.list()[0];
+    expect(s.toolInput).toBeNull();
+    expect(s.cwdFull).toBeNull();
+    expect(s.message).toBeNull();
+    expect(s.prompt).toBeNull();
+  });
 });

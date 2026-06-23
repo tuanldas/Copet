@@ -42,10 +42,58 @@ fn claude_notification_permission_prompt_waiting() {
         "hook_event_name": "Notification",
         "session_id": "sess-claude-002",
         "notification_type": "permission_prompt",
+        "message": "Claude needs your permission to use Bash",
         "cwd": "/Users/dev/my-project"
     }"#;
     let ev = map_claude::parse(json).expect("should parse");
     assert_eq!(ev.state, State::Waiting);
+    assert_eq!(
+        ev.message.as_deref(),
+        Some("Claude needs your permission to use Bash")
+    );
+}
+
+#[test]
+fn claude_pre_tool_use_enriches_tool_input_and_cwd() {
+    let json = r#"{
+        "hook_event_name": "PreToolUse",
+        "session_id": "sess-claude-00e",
+        "tool_name": "Bash",
+        "tool_input": { "command": "cargo test --workspace" },
+        "cwd": "/Users/dev/my-project"
+    }"#;
+    let ev = map_claude::parse(json).expect("should parse");
+    assert_eq!(ev.tool_input.as_deref(), Some("cargo test --workspace"));
+    assert_eq!(ev.cwd_full.as_deref(), Some("/Users/dev/my-project"));
+    assert_eq!(ev.project.as_deref(), Some("my-project"));
+}
+
+#[test]
+fn claude_user_prompt_submit_captures_prompt() {
+    let json = r#"{
+        "hook_event_name": "UserPromptSubmit",
+        "session_id": "sess-claude-00p",
+        "prompt": "refactor the auth module"
+    }"#;
+    let ev = map_claude::parse(json).expect("should parse");
+    assert_eq!(ev.state, State::Working);
+    assert_eq!(ev.prompt.as_deref(), Some("refactor the auth module"));
+}
+
+#[test]
+fn codex_leaves_claude_only_fields_null() {
+    let json = r#"{
+        "event": "preToolUse",
+        "session_id": "sess-codex-00e",
+        "tool": "bash",
+        "cwd": "/home/dev/codex-project"
+    }"#;
+    let ev = map_codex::parse(json).expect("should parse");
+    assert!(ev.tool_input.is_none());
+    assert!(ev.message.is_none());
+    assert!(ev.prompt.is_none());
+    // cwd_full is universal (not Claude-only), so Codex still populates it.
+    assert_eq!(ev.cwd_full.as_deref(), Some("/home/dev/codex-project"));
 }
 
 #[test]

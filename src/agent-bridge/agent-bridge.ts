@@ -130,10 +130,16 @@ function _handleEvent(
   petHandle: PetHandle,
   tooltipHandle: TooltipHandle,
 ): void {
-  const { session_id, state, ts, agent, project } = event;
+  const { session_id, state, ts, agent, project, tool, tool_input, cwd_full, message, prompt } =
+    event;
 
-  // Update session tracker
-  _tracker.update(session_id, state, ts, agent, project);
+  // Update session tracker (enrichment fields bundled as the trailing info arg).
+  _tracker.update(session_id, state, ts, agent, project, tool, {
+    toolInput: tool_input,
+    cwdFull: cwd_full,
+    message,
+    prompt,
+  });
 
   // XP + token accounting: applyAgentXp is the SOLE writer.
   // done → +10 XP (dedup per session_id:ts prevents double-count on replay).

@@ -31,6 +31,10 @@ function makeEvent(overrides: Partial<AgentEvent> = {}): AgentEvent {
     state: "done",
     tool: null,
     project: null,
+    tool_input: null,
+    cwd_full: null,
+    message: null,
+    prompt: null,
     ts: Math.floor(Date.now() / 1000),
     ...overrides,
   };

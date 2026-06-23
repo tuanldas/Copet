@@ -45,6 +45,24 @@ pub struct AgentEvent {
     pub tool: Option<String>,
     /// `cwd` basename — used as tooltip text in the pet overlay.
     pub project: Option<String>,
+
+    // ── Enrichment (additive, optional). Older hooks omit these fields; the
+    //    `#[serde(default)]` makes them deserialize to None so old events and
+    //    agents that don't supply them (Codex/Gemini/wrapper) never break. ──
+    /// Condensed tool argument — e.g. a Bash command or the edited file's
+    /// basename — so the UI can show "Bash: pnpm test" instead of just "Bash".
+    #[serde(default)]
+    pub tool_input: Option<String>,
+    /// Full `cwd` path (vs `project`, which is only the basename).
+    #[serde(default)]
+    pub cwd_full: Option<String>,
+    /// Notification text shown when state == Waiting (e.g. a permission prompt).
+    #[serde(default)]
+    pub message: Option<String>,
+    /// Most recent user prompt (Claude `UserPromptSubmit`).
+    #[serde(default)]
+    pub prompt: Option<String>,
+
     /// Unix timestamp in seconds.
     pub ts: u64,
 }
@@ -90,6 +108,10 @@ mod tests {
             state: State::Working,
             tool: Some("read_file".to_string()),
             project: Some("my-project".to_string()),
+            tool_input: Some("pnpm test".to_string()),
+            cwd_full: Some("/Users/dev/my-project".to_string()),
+            message: None,
+            prompt: None,
             ts: 1_750_000_000,
         }
     }
@@ -104,7 +126,21 @@ mod tests {
         assert_eq!(back.session_id, ev.session_id);
         assert_eq!(back.tool, ev.tool);
         assert_eq!(back.project, ev.project);
+        assert_eq!(back.tool_input, ev.tool_input);
+        assert_eq!(back.cwd_full, ev.cwd_full);
         assert_eq!(back.ts, ev.ts);
+    }
+
+    #[test]
+    fn enrichment_fields_default_to_none_when_absent() {
+        // An event JSON from an older hook (no enrichment fields) must still
+        // deserialize — #[serde(default)] fills the missing fields with None.
+        let json = r#"{"agent":"codex","session_id":"s","state":"working","tool":null,"project":null,"ts":0}"#;
+        let ev: AgentEvent = serde_json::from_str(json).expect("deserialize legacy event");
+        assert!(ev.tool_input.is_none());
+        assert!(ev.cwd_full.is_none());
+        assert!(ev.message.is_none());
+        assert!(ev.prompt.is_none());
     }
 
     #[test]

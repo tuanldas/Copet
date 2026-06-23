@@ -18,10 +18,23 @@ export interface SessionSnapshot {
   project: string | null;
   /** Current agent state. */
   state: AgentState;
+  /** Active tool name when state === "working" (else null). */
+  tool: string | null;
   /** Epoch seconds when the current active streak started (see SessionTracker). */
   since: number;
   /** Epoch seconds of the most recent event for this session. */
   ts: number;
+
+  // ── Enrichment (optional; present when the agent supplied it). Optional so
+  //    existing snapshot literals/consumers stay valid (additive contract). ──
+  /** Condensed tool argument, e.g. "pnpm test" or "main.ts". */
+  toolInput?: string | null;
+  /** Full cwd path (vs `project`, the basename) — shown on hover. */
+  cwdFull?: string | null;
+  /** Notification text shown when state === "waiting". */
+  message?: string | null;
+  /** Most recent user prompt (Claude only). */
+  prompt?: string | null;
 }
 
 /** Selectable status-label theme. Default is "kitchen". */

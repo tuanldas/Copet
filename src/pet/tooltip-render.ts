@@ -1,16 +1,18 @@
 /**
- * tooltip-render.ts — pure HTML builder for the pet tooltip session list.
+ * tooltip-render.ts — pure HTML builder for the pet session panel.
  *
- * No DOM/Tauri deps so it can be unit-tested directly. Shows up to MAX_ROWS
- * sessions (sorted by the shared comparator) + a "+N more" line when truncated.
+ * No DOM/Tauri deps so it can be unit-tested directly. Each session is a 2-line
+ * row: line 1 = agent badge + name + running duration; line 2 = state label +
+ * active tool (when working) + last-activity. Shows up to MAX_ROWS + "+N more".
  */
 
 import type { SessionSnapshot, LabelTheme } from "../types/session-snapshot.js";
 import { getStateLabel } from "../agent-bridge/state-labels.js";
 import { formatDuration } from "../ui/shared/session-duration.js";
 import { sortSessions, displayName } from "../ui/shared/session-list-model.js";
+import { agentBadge } from "../ui/shared/agent-badge.js";
 
-/** Data shown in the tooltip overlay. */
+/** Data shown in the panel. */
 export interface TooltipData {
   sessions: SessionSnapshot[];
   theme: LabelTheme;
@@ -28,7 +30,7 @@ export function escHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** Build the tooltip inner HTML for the given data + clock (epoch seconds). */
+/** Build the panel inner HTML for the given data + clock (epoch seconds). */
 export function renderTooltipHtml(data: TooltipData, nowSeconds: number): string {
   const sessions = sortSessions(data.sessions);
   if (sessions.length === 0) {
@@ -38,11 +40,35 @@ export function renderTooltipHtml(data: TooltipData, nowSeconds: number): string
   const rows = sessions.slice(0, TOOLTIP_MAX_ROWS).map((s) => {
     const label = getStateLabel(data.theme, s.state);
     const name = escHtml(displayName(s));
-    const time = formatDuration(nowSeconds - s.since);
+    const badge = escHtml(agentBadge(s.agent));
+    const dur = formatDuration(nowSeconds - s.since);
+    const act = formatDuration(nowSeconds - s.ts);
+    // Enriched tool line: "Bash: pnpm test" when tool_input is present, else
+    // just the bare tool name (keeps the compact panel from getting noisy).
+    const toolPart =
+      s.state === "working"
+        ? s.toolInput
+          ? ` · ${s.tool ? escHtml(s.tool) + ": " : ""}${escHtml(s.toolInput)}`
+          : s.tool
+            ? ` · ${escHtml(s.tool)}`
+            : ""
+        : "";
+    // Why a session is paused (permission/idle prompt), shown only when waiting.
+    const messagePart = s.state === "waiting" && s.message ? ` · ${escHtml(s.message)}` : "";
+    const badgePart = badge ? `<b style="opacity:0.55">${badge}</b> ` : "";
+    // Full cwd + last prompt go into the row title (hover) to keep the pet panel
+    // tight while still exposing the detail on demand.
+    const titleBits = [displayName(s)];
+    if (s.cwdFull) titleBits.push(s.cwdFull);
+    if (s.prompt) titleBits.push(`> ${s.prompt}`);
+    const title = escHtml(titleBits.join("\n"));
     return (
+      `<div style="margin-bottom:3px">` +
       `<div style="display:flex;gap:6px;justify-content:space-between">` +
-      `<span>${escHtml(label.emoji)} ${name}</span>` +
-      `<span style="opacity:0.7">${escHtml(label.text)} · ${time}</span>` +
+      `<span title="${title}">${badgePart}${name}</span>` +
+      `<span style="opacity:0.7">${dur}</span>` +
+      `</div>` +
+      `<div style="opacity:0.6;font-size:11px">${escHtml(label.emoji)} ${escHtml(label.text)}${toolPart}${messagePart} · ${act} trước</div>` +
       `</div>`
     );
   });

@@ -11,7 +11,7 @@ import type { AgentState } from "../../types/agent-event.js";
 const NOW = 1000;
 
 function snap(state: AgentState, extra: Partial<SessionSnapshot> = {}): SessionSnapshot {
-  return { sessionId: "sid123", agent: "claude-code", project: "proj", state, since: NOW, ts: NOW, ...extra };
+  return { sessionId: "sid123", agent: "claude-code", project: "proj", state, tool: null, since: NOW, ts: NOW, ...extra };
 }
 
 describe("renderTooltipHtml", () => {
@@ -59,5 +59,60 @@ describe("renderTooltipHtml", () => {
       NOW,
     );
     expect(html).toContain("19m");
+  });
+
+  it("shows the agent badge", () => {
+    const html = renderTooltipHtml({ sessions: [snap("working", { project: "p" })], theme: "kitchen" }, NOW);
+    expect(html).toContain("Claude");
+  });
+
+  it("shows the active tool only when working", () => {
+    const working = renderTooltipHtml({ sessions: [snap("working", { project: "p", tool: "Bash" })], theme: "kitchen" }, NOW);
+    expect(working).toContain("Bash");
+    const done = renderTooltipHtml({ sessions: [snap("done", { project: "p", tool: "Bash" })], theme: "kitchen" }, NOW);
+    expect(done).not.toContain("Bash");
+  });
+
+  it("shows the enriched tool input as 'Tool: input' when working", () => {
+    const html = renderTooltipHtml(
+      { sessions: [snap("working", { project: "p", tool: "Bash", toolInput: "pnpm test" })], theme: "kitchen" },
+      NOW,
+    );
+    expect(html).toContain("Bash: pnpm test");
+  });
+
+  it("shows the notification message only when waiting", () => {
+    const waiting = renderTooltipHtml(
+      { sessions: [snap("waiting", { project: "p", message: "needs permission for Bash" })], theme: "kitchen" },
+      NOW,
+    );
+    expect(waiting).toContain("needs permission for Bash");
+    const working = renderTooltipHtml(
+      { sessions: [snap("working", { project: "p", message: "needs permission for Bash" })], theme: "kitchen" },
+      NOW,
+    );
+    expect(working).not.toContain("needs permission for Bash");
+  });
+
+  it("puts the full cwd + prompt into the row title (hover) and escapes them", () => {
+    const html = renderTooltipHtml(
+      {
+        sessions: [snap("working", { project: "p", cwdFull: "/Users/dev/<x>", prompt: "do a thing" })],
+        theme: "kitchen",
+      },
+      NOW,
+    );
+    expect(html).toContain("/Users/dev/&lt;x&gt;");
+    expect(html).toContain("&gt; do a thing"); // "> do a thing" with > escaped
+    expect(html).not.toContain("<x>");
+  });
+
+  it("escapes HTML in enriched tool input", () => {
+    const html = renderTooltipHtml(
+      { sessions: [snap("working", { project: "p", tool: "Bash", toolInput: "<script>" })], theme: "kitchen" },
+      NOW,
+    );
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).not.toContain("<script>");
   });
 });

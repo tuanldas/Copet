@@ -66,6 +66,11 @@ pub fn parse(json: &str) -> Option<AgentEvent> {
         state,
         tool: p.tool,
         project,
+        // Enrichment fields are Claude-only for now; Codex leaves them null.
+        tool_input: None,
+        cwd_full: p.cwd,
+        message: None,
+        prompt: None,
         ts: unix_now(),
     })
 }

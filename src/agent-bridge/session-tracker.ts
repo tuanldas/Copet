@@ -15,8 +15,29 @@ export interface SessionEntry {
   ts: number;
   agent: AgentId | null;
   project: string | null;
+  /** Active tool name when state === "working" (else null). */
+  tool: string | null;
   /** Unix timestamp (seconds) when the current active streak started. */
   since: number;
+  /** Condensed tool argument (e.g. "pnpm test" / "main.ts"). */
+  toolInput: string | null;
+  /** Full cwd path (vs `project`, the basename). */
+  cwdFull: string | null;
+  /** Notification text shown when state === "waiting". */
+  message: string | null;
+  /** Most recent user prompt (Claude only). */
+  prompt: string | null;
+}
+
+/**
+ * Optional enrichment fields, bundled into one object so `update()` keeps a
+ * readable signature instead of a long positional argument list.
+ */
+export interface SessionInfo {
+  toolInput?: string | null;
+  cwdFull?: string | null;
+  message?: string | null;
+  prompt?: string | null;
 }
 
 export interface AggregateResult {
@@ -73,6 +94,8 @@ export class SessionTracker {
     ts: number,
     agent: AgentId | null,
     project: string | null,
+    tool: string | null = null,
+    info: SessionInfo = {},
   ): void {
     const prev = this.sessions.get(sessionId);
     // `since` marks when the current active streak started so the UI can show
@@ -87,7 +110,18 @@ export class SessionTracker {
     } else {
       since = prev.since;
     }
-    this.sessions.set(sessionId, { state, ts, agent, project, since });
+    this.sessions.set(sessionId, {
+      state,
+      ts,
+      agent,
+      project,
+      since,
+      tool,
+      toolInput: info.toolInput ?? null,
+      cwdFull: info.cwdFull ?? null,
+      message: info.message ?? null,
+      prompt: info.prompt ?? null,
+    });
   }
 
   /**
@@ -100,8 +134,13 @@ export class SessionTracker {
       agent: e.agent,
       project: e.project,
       state: e.state,
+      tool: e.tool,
       since: e.since,
       ts: e.ts,
+      toolInput: e.toolInput,
+      cwdFull: e.cwdFull,
+      message: e.message,
+      prompt: e.prompt,
     }));
   }
 

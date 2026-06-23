@@ -40,6 +40,18 @@ export interface AgentEvent {
   tool: string | null;
   /** `cwd` basename — tooltip text shown in the pet overlay. */
   project: string | null;
+
+  // ── Enrichment (additive). The daemon re-serialises every event through the
+  //    Rust struct, so these always arrive (null when the agent omits them). ──
+  /** Condensed tool argument, e.g. a Bash command or edited file basename. */
+  tool_input: string | null;
+  /** Full `cwd` path (vs `project`, which is only the basename). */
+  cwd_full: string | null;
+  /** Notification text shown when state === "waiting" (e.g. permission prompt). */
+  message: string | null;
+  /** Most recent user prompt (Claude UserPromptSubmit). */
+  prompt: string | null;
+
   /** Unix timestamp in seconds. */
   ts: number;
 }

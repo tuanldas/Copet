@@ -47,6 +47,11 @@ pub fn parse(json: &str) -> Option<AgentEvent> {
         state,
         tool: p.tool_name,
         project,
+        // tool_input/message/prompt are Claude-only for now; cwd is universal.
+        tool_input: None,
+        cwd_full: p.cwd,
+        message: None,
+        prompt: None,
         ts: unix_now(),
     })
 }
