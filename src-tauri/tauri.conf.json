@@ -55,21 +55,6 @@
         "resizable": false,
         "visible": false,
         "focus": true
-      },
-      {
-        "label": "sessions",
-        "title": "Copet Sessions",
-        "url": "sessions.html",
-        "width": 320,
-        "height": 520,
-        "transparent": true,
-        "decorations": false,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "resizable": false,
-        "visible": false,
-        "focus": true,
-        "shadow": false
       }
     ],
     "security": {

@@ -188,6 +188,17 @@ fn init_windows(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 
     start_click_through_poll(app.handle().clone());
 
+    // Sessions popover: build at runtime (post-accessory-policy), NOT in
+    // tauri.conf.json, for the SAME reason as the pet — only a window born under
+    // the accessory policy can be promoted onto another app's fullscreen Space.
+    // A config-declared popover simply fails to appear while a fullscreen app is
+    // frontmost. Starts hidden; the tray toggles + positions it (see tray.rs).
+    let sessions = build_sessions_window(app)?;
+    #[cfg(target_os = "macos")]
+    set_overlay_collection_behavior(&sessions);
+    #[cfg(not(target_os = "macos"))]
+    let _ = sessions;
+
     // Shop window: show in debug for visual verification; hidden in release.
     init_shop_window(app)?;
 
@@ -224,29 +235,51 @@ fn build_pet_window(app: &mut App) -> Result<WebviewWindow, Box<dyn std::error::
     Ok(pet)
 }
 
-/// macOS: let the pet overlay appear on top of *other apps'* native-fullscreen Spaces.
+/// Build the sessions popover at runtime (post-accessory-policy) so it can be
+/// promoted onto other apps' fullscreen Spaces — a config-declared window cannot
+/// (see build_pet_window). Mirrors the options it previously declared in
+/// tauri.conf.json; starts hidden and is shown/positioned from the tray.
+fn build_sessions_window(app: &mut App) -> Result<WebviewWindow, Box<dyn std::error::Error>> {
+    let win = WebviewWindowBuilder::new(app, "sessions", WebviewUrl::App("sessions.html".into()))
+        .title("Copet Sessions")
+        .inner_size(320.0, 520.0)
+        .transparent(true)
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .shadow(false)
+        .visible(false)
+        .focused(false)
+        .visible_on_all_workspaces(true)
+        .build()?;
+
+    Ok(win)
+}
+
+/// macOS: let a window appear on top of *other apps'* native-fullscreen Spaces.
+/// Used for both the pet overlay and the sessions popover.
 ///
 /// The builder's `visible_on_all_workspaces(true)` only makes tao set `CanJoinAllSpaces`,
 /// which covers ordinary desktop Spaces and Mission Control — but NOT another app's
 /// fullscreen Space. `FullScreenAuxiliary` is the flag that lets a non-fullscreen window
-/// draw over a fullscreen app; `Stationary` keeps the pet pinned (no slide animation)
-/// during Space switches. We re-include `CanJoinAllSpaces` so replacing the behavior
-/// wholesale preserves all-desktops coverage.
+/// draw over a fullscreen app; `Stationary` pins it (no slide animation) during Space
+/// switches. We re-include `CanJoinAllSpaces` so replacing the behavior wholesale
+/// preserves all-desktops coverage.
 ///
-/// These flags only take effect because the pet is created *after*
-/// `set_activation_policy(Accessory)` (see build_pet_window). `toggle_pet` only
-/// hide()/show()s the window, so the behavior + level persist across toggles.
+/// These flags only take effect because the window is created *after*
+/// `set_activation_policy(Accessory)` (see build_pet_window / build_sessions_window).
 #[cfg(target_os = "macos")]
-fn set_overlay_collection_behavior(pet: &WebviewWindow) {
+fn set_overlay_collection_behavior(win: &WebviewWindow) {
     use objc2_app_kit::{NSScreenSaverWindowLevel, NSWindow, NSWindowCollectionBehavior};
 
-    let Ok(ptr) = pet.ns_window() else {
+    let Ok(ptr) = win.ns_window() else {
         return;
     };
     if ptr.is_null() {
         return;
     }
-    // SAFETY: Tauri returns a live NSWindow pointer for the macOS "pet" window, and this
+    // SAFETY: Tauri returns a live NSWindow pointer for the macOS window, and this
     // runs on the main thread (setup()), where AppKit window mutations are valid.
     let ns_window: &NSWindow = unsafe { &*(ptr.cast::<NSWindow>()) };
 
@@ -255,9 +288,9 @@ fn set_overlay_collection_behavior(pet: &WebviewWindow) {
         | NSWindowCollectionBehavior::Stationary;
     ns_window.setCollectionBehavior(behavior);
 
-    // FullScreenAuxiliary lets the pet join a fullscreen Space; the floating level (~3-5)
-    // would render *under* that Space's content, so raise to ScreenSaver level — the
-    // standard "always over fullscreen" level used by overlay tools.
+    // FullScreenAuxiliary lets the window join a fullscreen Space; the floating level
+    // (~3-5) would render *under* that Space's content, so raise to ScreenSaver level —
+    // the standard "always over fullscreen" level used by overlay tools.
     ns_window.setLevel(NSScreenSaverWindowLevel);
 }
 

@@ -38,5 +38,11 @@ copet-protocol = { path = "../crates/copet-protocol" }
 # tao's `visibleOnAllWorkspaces` only sets CanJoinAllSpaces (ordinary desktops);
 # FullScreenAuxiliary is required for a non-fullscreen window to draw over a
 # fullscreen app's Space. Applied in init_windows (lib.rs).
-objc2-app-kit = { version = "0.3", default-features = false, features = ["NSWindow", "NSResponder"] }
+#
+# NSScreen/NSEvent: position the tray popover natively in Cocoa points — the only
+# coordinate space macOS keeps consistent across mixed-DPI displays (Tauri's
+# cursor_position()/monitor coords are not; see tray.rs + tauri#7890).
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["NSWindow", "NSResponder", "NSScreen", "NSEvent"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["NSArray", "NSGeometry"] }
 

@@ -5,7 +5,7 @@
 // init_tray(app) — called once from lib.rs setup().
 
 use tauri::{
-    App, AppHandle, Manager, Monitor, PhysicalPosition, WebviewWindow,
+    App, AppHandle, Manager, WebviewWindow,
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     image::Image,
@@ -157,63 +157,122 @@ pub fn toggle_sessions_popover(app: &AppHandle) {
 }
 
 /// Place `win` horizontally centred under the cursor, near the top of whichever
-/// monitor the cursor is on (menu-bar popover anchoring). No-op on any failure.
+/// display the cursor is on (menu-bar popover anchoring). No-op on any failure.
 fn position_popover_at_cursor(app: &AppHandle, win: &WebviewWindow) {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = app; // the cursor comes from AppKit on macOS, not from `app`.
+        position_popover_macos(win);
+    }
+    #[cfg(not(target_os = "macos"))]
+    position_popover_fallback(app, win);
+}
+
+/// macOS: position natively via AppKit. `NSEvent::mouseLocation` and `NSScreen`
+/// frames are BOTH in Cocoa global points (bottom-left origin) — the one
+/// coordinate space macOS keeps consistent across displays with different scale
+/// factors. Tauri's `cursor_position()`/monitor coords are NOT (verified
+/// on-device: cursor_position returned an off-screen value, monitor.position is
+/// logical while monitor.size is physical; tauri#7890 / #7139). So we bypass them.
+#[cfg(target_os = "macos")]
+fn position_popover_macos(win: &WebviewWindow) {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSEvent, NSScreen, NSWindow};
+    use objc2_foundation::NSPoint;
+
+    // The popover toggle always runs on the main thread (run_on_main_thread).
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let mouse = NSEvent::mouseLocation();
+
+    // The screen whose frame contains the cursor (fall back to the main screen).
+    let screens = NSScreen::screens(mtm);
+    let mut hit = None;
+    for i in 0..screens.count() {
+        let s = screens.objectAtIndex(i);
+        let f = s.frame();
+        if mouse.x >= f.origin.x
+            && mouse.x < f.origin.x + f.size.width
+            && mouse.y >= f.origin.y
+            && mouse.y < f.origin.y + f.size.height
+        {
+            hit = Some(s);
+            break;
+        }
+    }
+    let Some(screen) = hit.or_else(|| NSScreen::mainScreen(mtm)) else {
+        return;
+    };
+
+    let Ok(ptr) = win.ns_window() else {
+        return;
+    };
+    if ptr.is_null() {
+        return;
+    }
+    // SAFETY: Tauri returns a live NSWindow pointer for the macOS "sessions"
+    // window, and this runs on the main thread.
+    let ns_window: &NSWindow = unsafe { &*(ptr.cast::<NSWindow>()) };
+
+    // visibleFrame excludes the menu bar (and Dock) → popover sits just below it.
+    let visible = screen.visibleFrame();
+    let frame = ns_window.frame();
+    let (w, h) = (frame.size.width, frame.size.height);
+
+    // Reuse the clamp math for x; y is for Cocoa's bottom-left origin (top edge
+    // 8 pt below the visible top).
+    let (x, _) = popover_position(mouse.x, visible.origin.x, 0.0, visible.size.width, w, 8.0);
+    let y = visible.origin.y + visible.size.height - h - 8.0;
+
+    ns_window.setFrameOrigin(NSPoint { x, y });
+}
+
+/// Non-macOS fallback: positions and sizes share one physical space, so the
+/// official `monitor_from_point` + physical placement is consistent.
+#[cfg(not(target_os = "macos"))]
+fn position_popover_fallback(app: &AppHandle, win: &WebviewWindow) {
     let Ok(cursor) = app.cursor_position() else {
         return;
     };
-    let Some(monitor) = cursor_monitor(win, cursor.x, cursor.y) else {
+    let monitor = win
+        .monitor_from_point(cursor.x, cursor.y)
+        .ok()
+        .flatten()
+        .or_else(|| win.current_monitor().ok().flatten())
+        .or_else(|| win.primary_monitor().ok().flatten());
+    let Some(monitor) = monitor else {
         return;
     };
     let Ok(win_size) = win.outer_size() else {
         return;
     };
-    let mpos = monitor.position();
-    let msize = monitor.size();
-    let margin = (8.0 * monitor.scale_factor()).round() as i32;
+    let mon = monitor.position();
     let (x, y) = popover_position(
-        cursor.x as i32,
-        mpos.x,
-        mpos.y,
-        msize.width as i32,
-        win_size.width as i32,
-        margin,
+        cursor.x,
+        mon.x as f64,
+        mon.y as f64,
+        monitor.size().width as f64,
+        win_size.width as f64,
+        8.0,
     );
-    let _ = win.set_position(PhysicalPosition::new(x, y));
-}
-
-/// The monitor whose bounds contain the point (physical px); falls back to primary.
-fn cursor_monitor(win: &WebviewWindow, x: f64, y: f64) -> Option<Monitor> {
-    let monitors = win.available_monitors().ok()?;
-    monitors
-        .into_iter()
-        .find(|m| {
-            let p = m.position();
-            let s = m.size();
-            point_in_rect(x, y, p.x, p.y, s.width, s.height)
-        })
-        .or_else(|| win.primary_monitor().ok().flatten())
-}
-
-/// Is the physical point (px, py) inside the rect at (x, y) of size (w, h)?
-fn point_in_rect(px: f64, py: f64, x: i32, y: i32, w: u32, h: u32) -> bool {
-    px >= x as f64 && px < x as f64 + w as f64 && py >= y as f64 && py < y as f64 + h as f64
+    let _ = win.set_position(tauri::PhysicalPosition::new(x.round() as i32, y.round() as i32));
 }
 
 /// Top-left for the popover: horizontally centred on `cursor_x`, clamped within
 /// the monitor's horizontal bounds, at `mon_y + margin` (just below the menu bar).
-/// Pure (no Tauri types) so the cross-monitor math is unit-testable.
+/// All values in ONE coordinate space (logical points on macOS). Pure → testable.
 fn popover_position(
-    cursor_x: i32,
-    mon_x: i32,
-    mon_y: i32,
-    mon_w: i32,
-    win_w: i32,
-    margin: i32,
-) -> (i32, i32) {
+    cursor_x: f64,
+    mon_x: f64,
+    mon_y: f64,
+    mon_w: f64,
+    win_w: f64,
+    margin: f64,
+) -> (f64, f64) {
     let min_x = mon_x + margin;
     let max_x = mon_x + mon_w - win_w - margin;
-    let centred = cursor_x - win_w / 2;
+    let centred = cursor_x - win_w / 2.0;
     // When the window is wider than the monitor's usable width, pin to the left edge.
     let x = if max_x >= min_x {
         centred.clamp(min_x, max_x)
@@ -242,53 +301,48 @@ pub fn set_tray_state(app: &AppHandle, state: TrayAgentState) {
 
 #[cfg(test)]
 mod tests {
-    use super::{point_in_rect, popover_position};
+    use super::popover_position;
 
-    #[test]
-    fn point_in_rect_inside_and_boundaries() {
-        // 1920x1080 monitor at origin.
-        assert!(point_in_rect(100.0, 100.0, 0, 0, 1920, 1080));
-        assert!(point_in_rect(0.0, 0.0, 0, 0, 1920, 1080)); // top-left inclusive
-        assert!(!point_in_rect(1920.0, 100.0, 0, 0, 1920, 1080)); // right edge exclusive
-        assert!(!point_in_rect(-1.0, 100.0, 0, 0, 1920, 1080));
-    }
-
-    #[test]
-    fn point_in_rect_secondary_monitor_to_the_right() {
-        // External monitor at x=1920. A cursor at 2500 is on it, not on primary.
-        assert!(point_in_rect(2500.0, 50.0, 1920, 0, 1920, 1080));
-        assert!(!point_in_rect(500.0, 50.0, 1920, 0, 1920, 1080));
+    /// f64 equality within half a pixel (avoids exact float compares).
+    fn approx(a: f64, b: f64) -> bool {
+        (a - b).abs() < 0.5
     }
 
     #[test]
     fn popover_centres_on_cursor_when_room() {
-        // Primary monitor, cursor mid-screen, 300px-wide popover, 8px margin.
-        let (x, y) = popover_position(1000, 0, 0, 1920, 300, 8);
-        assert_eq!(x, 1000 - 150); // centred
-        assert_eq!(y, 8); // just below the menu bar
+        // Cursor mid-screen, 300-wide popover, 8 margin.
+        let (x, y) = popover_position(1000.0, 0.0, 0.0, 1920.0, 300.0, 8.0);
+        assert!(approx(x, 850.0)); // 1000 - 150
+        assert!(approx(y, 8.0)); // just below the menu bar
     }
 
     #[test]
     fn popover_clamps_to_monitor_right_edge() {
         // Cursor near the right edge → popover stays fully on-screen.
-        let (x, _) = popover_position(1900, 0, 0, 1920, 300, 8);
-        assert_eq!(x, 1920 - 300 - 8);
+        let (x, _) = popover_position(1900.0, 0.0, 0.0, 1920.0, 300.0, 8.0);
+        assert!(approx(x, 1920.0 - 300.0 - 8.0));
     }
 
     #[test]
     fn popover_on_external_monitor_stays_on_that_monitor() {
-        // External monitor to the right (origin x=1920). Cursor at 2000 → popover
-        // must land within [1920, 3840), never back on the primary monitor.
-        let (x, y) = popover_position(2000, 1920, 0, 1920, 300, 8);
-        assert!(x >= 1920 + 8, "x={x} should be on the external monitor");
-        assert!(x <= 1920 + 1920 - 300 - 8);
-        assert_eq!(y, 8);
+        // External monitor to the right (logical origin x=1920). Cursor at 2000
+        // → popover must land within [1928, 3532], never back on the primary.
+        let (x, y) = popover_position(2000.0, 1920.0, 0.0, 1920.0, 300.0, 8.0);
+        assert!((1928.0..=3532.0).contains(&x), "x={x} should be on the external monitor");
+        assert!(approx(y, 8.0));
     }
 
     #[test]
     fn popover_on_external_monitor_to_the_left() {
         // External monitor to the LEFT (negative origin). Cursor at -1000.
-        let (x, _) = popover_position(-1000, -1920, 0, 1920, 300, 8);
-        assert!((-1920 + 8..=-8 - 300).contains(&x));
+        let (x, _) = popover_position(-1000.0, -1920.0, 0.0, 1920.0, 300.0, 8.0);
+        assert!((-1912.0..=-308.0).contains(&x));
+    }
+
+    #[test]
+    fn popover_pins_left_when_window_wider_than_monitor() {
+        // win_w > usable mon_w → pin to the left margin.
+        let (x, _) = popover_position(50.0, 0.0, 0.0, 200.0, 300.0, 8.0);
+        assert!(approx(x, 8.0));
     }
 }
