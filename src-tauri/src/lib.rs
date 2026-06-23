@@ -92,9 +92,19 @@ fn init_plugins(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     app.handle()
         .plugin(tauri_plugin_store::Builder::new().build())?;
 
-    // Phase 06: window position memory (saves/restores per-monitor position)
-    app.handle()
-        .plugin(tauri_plugin_window_state::Builder::new().build())?;
+    // Phase 06: window position memory (saves/restores per-monitor position).
+    // Exclude VISIBLE: this is a tray app — toggled windows (HUD / Settings /
+    // Shop / sessions popover) must stay hidden at launch, never reappear just
+    // because they were open when the app last quit. The pet shows regardless
+    // (its builder default is visible).
+    app.handle().plugin(
+        tauri_plugin_window_state::Builder::new()
+            .with_state_flags(
+                tauri_plugin_window_state::StateFlags::all()
+                    & !tauri_plugin_window_state::StateFlags::VISIBLE,
+            )
+            .build(),
+    )?;
 
     // Phase 06: positioner (preset corner snapping)
     app.handle()
@@ -196,8 +206,10 @@ fn init_windows(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     let sessions = build_sessions_window(app)?;
     #[cfg(target_os = "macos")]
     set_overlay_collection_behavior(&sessions);
-    #[cfg(not(target_os = "macos"))]
-    let _ = sessions;
+    // Force-hide at launch. The popover is shown on demand from the tray; the
+    // builder's visible(false) can be defeated by a restored window state or a
+    // transparent/always-on-top creation quirk, so hide it explicitly here.
+    let _ = sessions.hide();
 
     // Shop window: show in debug for visual verification; hidden in release.
     init_shop_window(app)?;
@@ -294,7 +306,8 @@ fn set_overlay_collection_behavior(win: &WebviewWindow) {
     ns_window.setLevel(NSScreenSaverWindowLevel);
 }
 
-/// Initialise the shop window. In debug builds, show it for visual verification.
+/// Initialise the shop window. In debug builds, show it for visual verification
+/// (handy during `pnpm tauri dev`); it stays hidden in release.
 fn init_shop_window(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     let shop = app
         .get_webview_window("shop")
