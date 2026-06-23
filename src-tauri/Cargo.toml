@@ -33,3 +33,10 @@ tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "io-util", 
 interprocess = { version = "2", features = ["tokio"] }
 copet-protocol = { path = "../crates/copet-protocol" }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# Pet overlay must also float over *other apps'* native-fullscreen Spaces.
+# tao's `visibleOnAllWorkspaces` only sets CanJoinAllSpaces (ordinary desktops);
+# FullScreenAuxiliary is required for a non-fullscreen window to draw over a
+# fullscreen app's Space. Applied in init_windows (lib.rs).
+objc2-app-kit = { version = "0.3", default-features = false, features = ["NSWindow", "NSResponder"] }
+

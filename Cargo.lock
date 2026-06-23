@@ -511,6 +511,7 @@ version = "0.1.0"
 dependencies = [
  "copet-protocol",
  "interprocess",
+ "objc2-app-kit",
  "png 0.17.16",
  "serde",
  "serde_json",

@@ -11,7 +11,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use tauri::{App, AppHandle, Manager, WebviewWindow};
+use tauri::{App, AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 mod commands;
@@ -168,18 +168,94 @@ fn init_windows(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(target_os = "macos")]
     app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
-    let pet = app
-        .get_webview_window("pet")
-        .ok_or("pet window not found in tauri.conf.json")?;
+    // Create the pet window HERE — after the accessory policy is set — not in
+    // tauri.conf.json. macOS fixes a window's Space membership at creation time, so a
+    // config-declared window (built before setup() runs, while the app is still the
+    // default Regular policy) can NEVER be promoted onto another app's fullscreen Space,
+    // even with CanJoinAllSpaces + FullScreenAuxiliary + a high window level. Building it
+    // post-policy is the actual fix. (Refs: tao#189, keli-keli#8.)
+    let pet = build_pet_window(app)?;
 
     // Start fully click-through; the poll below re-enables capture over the pet body.
     pet.set_ignore_cursor_events(true)?;
+
+    // macOS: float over *other apps'* native-fullscreen Spaces (collection behavior + level).
+    #[cfg(target_os = "macos")]
+    set_overlay_collection_behavior(&pet);
+
     start_click_through_poll(app.handle().clone());
 
     // Shop window: show in debug for visual verification; hidden in release.
     init_shop_window(app)?;
 
     Ok(())
+}
+
+/// Build the transparent, click-through pet overlay window at runtime.
+///
+/// MUST be called from setup() *after* `set_activation_policy(Accessory)`: macOS binds a
+/// window's Space membership at creation, so only a window born under the accessory policy
+/// can be placed over other apps' fullscreen Spaces. Mirrors the options the pet window
+/// previously declared in tauri.conf.json.
+fn build_pet_window(app: &mut App) -> Result<WebviewWindow, Box<dyn std::error::Error>> {
+    use tauri_plugin_positioner::{Position, WindowExt};
+
+    let pet = WebviewWindowBuilder::new(app, "pet", WebviewUrl::App("index.html".into()))
+        .title("Copet")
+        .inner_size(220.0, 220.0)
+        .transparent(true)
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .shadow(false)
+        .focused(false)
+        .accept_first_mouse(true)
+        .visible_on_all_workspaces(true)
+        .build()?;
+
+    // Default to the bottom-right corner (matches reset_pet_position); the window-state
+    // plugin restores a remembered position on later launches.
+    let _ = pet.move_window(Position::BottomRight);
+
+    Ok(pet)
+}
+
+/// macOS: let the pet overlay appear on top of *other apps'* native-fullscreen Spaces.
+///
+/// The builder's `visible_on_all_workspaces(true)` only makes tao set `CanJoinAllSpaces`,
+/// which covers ordinary desktop Spaces and Mission Control — but NOT another app's
+/// fullscreen Space. `FullScreenAuxiliary` is the flag that lets a non-fullscreen window
+/// draw over a fullscreen app; `Stationary` keeps the pet pinned (no slide animation)
+/// during Space switches. We re-include `CanJoinAllSpaces` so replacing the behavior
+/// wholesale preserves all-desktops coverage.
+///
+/// These flags only take effect because the pet is created *after*
+/// `set_activation_policy(Accessory)` (see build_pet_window). `toggle_pet` only
+/// hide()/show()s the window, so the behavior + level persist across toggles.
+#[cfg(target_os = "macos")]
+fn set_overlay_collection_behavior(pet: &WebviewWindow) {
+    use objc2_app_kit::{NSScreenSaverWindowLevel, NSWindow, NSWindowCollectionBehavior};
+
+    let Ok(ptr) = pet.ns_window() else {
+        return;
+    };
+    if ptr.is_null() {
+        return;
+    }
+    // SAFETY: Tauri returns a live NSWindow pointer for the macOS "pet" window, and this
+    // runs on the main thread (setup()), where AppKit window mutations are valid.
+    let ns_window: &NSWindow = unsafe { &*(ptr.cast::<NSWindow>()) };
+
+    let behavior = NSWindowCollectionBehavior::CanJoinAllSpaces
+        | NSWindowCollectionBehavior::FullScreenAuxiliary
+        | NSWindowCollectionBehavior::Stationary;
+    ns_window.setCollectionBehavior(behavior);
+
+    // FullScreenAuxiliary lets the pet join a fullscreen Space; the floating level (~3-5)
+    // would render *under* that Space's content, so raise to ScreenSaver level — the
+    // standard "always over fullscreen" level used by overlay tools.
+    ns_window.setLevel(NSScreenSaverWindowLevel);
 }
 
 /// Initialise the shop window. In debug builds, show it for visual verification.

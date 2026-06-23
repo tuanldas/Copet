@@ -14,21 +14,6 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "label": "pet",
-        "title": "Copet",
-        "width": 220,
-        "height": 220,
-        "transparent": true,
-        "decorations": false,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "resizable": false,
-        "shadow": false,
-        "focus": false,
-        "acceptFirstMouse": true,
-        "visibleOnAllWorkspaces": true
-      },
-      {
         "label": "shop",
         "title": "Copet Shop",
         "url": "shop.html",
