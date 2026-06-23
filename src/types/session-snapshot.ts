@@ -35,6 +35,18 @@ export interface SessionSnapshot {
   message?: string | null;
   /** Most recent user prompt (Claude only). */
   prompt?: string | null;
+
+  // ── Transcript enrichment (Claude only, opt-in; absent when disabled). ──
+  /** Model id from the last assistant turn (e.g. "claude-opus-4-8"). */
+  model?: string | null;
+  /** Task title / summary (Claude ai-title). */
+  summary?: string | null;
+  /** Last assistant text message (truncated). */
+  lastMessage?: string | null;
+  /** Input/context tokens of the last assistant turn. */
+  tokensIn?: number | null;
+  /** Output tokens of the last assistant turn. */
+  tokensOut?: number | null;
 }
 
 /** Selectable status-label theme. Default is "kitchen". */

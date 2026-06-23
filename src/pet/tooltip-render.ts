@@ -11,6 +11,7 @@ import { getStateLabel } from "../agent-bridge/state-labels.js";
 import { formatDuration } from "../ui/shared/session-duration.js";
 import { sortSessions, displayName } from "../ui/shared/session-list-model.js";
 import { agentBadge } from "../ui/shared/agent-badge.js";
+import { formatTokens, shortModel } from "../ui/shared/session-format.js";
 
 /** Data shown in the panel. */
 export interface TooltipData {
@@ -56,11 +57,24 @@ export function renderTooltipHtml(data: TooltipData, nowSeconds: number): string
     // Why a session is paused (permission/idle prompt), shown only when waiting.
     const messagePart = s.state === "waiting" && s.message ? ` · ${escHtml(s.message)}` : "";
     const badgePart = badge ? `<b style="opacity:0.55">${badge}</b> ` : "";
-    // Full cwd + last prompt go into the row title (hover) to keep the pet panel
-    // tight while still exposing the detail on demand.
+    // Transcript enrichment (opt-in): model + tokens on a compact meta line;
+    // summary + last message go into the hover title to keep the panel tight.
+    const modelPart = s.model ? escHtml(shortModel(s.model)) : "";
+    const tokensPart =
+      s.tokensIn != null || s.tokensOut != null
+        ? `${modelPart ? " · " : ""}↑${formatTokens(s.tokensIn ?? 0)} ↓${formatTokens(s.tokensOut ?? 0)}`
+        : "";
+    const metaLine =
+      modelPart || tokensPart
+        ? `<div style="opacity:0.5;font-size:11px">${modelPart}${tokensPart}</div>`
+        : "";
+    // Full cwd + last prompt + summary + last message go into the row title
+    // (hover) to keep the pet panel tight while still exposing the detail.
     const titleBits = [displayName(s)];
     if (s.cwdFull) titleBits.push(s.cwdFull);
     if (s.prompt) titleBits.push(`> ${s.prompt}`);
+    if (s.summary) titleBits.push(`≡ ${s.summary}`);
+    if (s.lastMessage) titleBits.push(s.lastMessage);
     const title = escHtml(titleBits.join("\n"));
     return (
       `<div style="margin-bottom:3px">` +
@@ -69,6 +83,7 @@ export function renderTooltipHtml(data: TooltipData, nowSeconds: number): string
       `<span style="opacity:0.7">${dur}</span>` +
       `</div>` +
       `<div style="opacity:0.6;font-size:11px">${escHtml(label.emoji)} ${escHtml(label.text)}${toolPart}${messagePart} · ${act} trước</div>` +
+      metaLine +
       `</div>`
     );
   });

@@ -56,6 +56,18 @@
   opacity: 0.55;
 }
 
+/* Model badge (transcript opt-in), e.g. "opus-4-8". Sits next to the agent badge. */
+.session-model {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--color-surface-muted, rgba(148, 163, 184, 0.18));
+  opacity: 0.8;
+}
+
 .session-name {
   flex: 1 1 auto;
   min-width: 0;
@@ -94,8 +106,25 @@
   text-overflow: ellipsis;
 }
 
+.session-tokens {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
 .session-activity {
   flex: 0 0 auto;
+}
+
+/* Task summary (transcript ai-title). One line, slightly more prominent than
+   the detail line; full text on hover via title. */
+.session-summary {
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  opacity: 0.7;
 }
 
 /* Rich third line: condensed command/file while working, or the latest prompt.

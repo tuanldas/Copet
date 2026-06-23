@@ -115,4 +115,38 @@ describe("renderTooltipHtml", () => {
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("<script>");
   });
+
+  it("shows model (claude- prefix stripped) and compact tokens when present", () => {
+    const html = renderTooltipHtml(
+      {
+        sessions: [snap("working", { project: "p", model: "claude-opus-4-8", tokensIn: 248000, tokensOut: 1219 })],
+        theme: "kitchen",
+      },
+      NOW,
+    );
+    expect(html).toContain("opus-4-8");
+    expect(html).not.toContain("claude-opus-4-8");
+    expect(html).toContain("248k");
+    expect(html).toContain("1.2k");
+  });
+
+  it("puts summary + last message into the hover title and escapes them", () => {
+    const html = renderTooltipHtml(
+      {
+        sessions: [snap("working", { project: "p", summary: "Add <b>mode</b>", lastMessage: "all done" })],
+        theme: "kitchen",
+      },
+      NOW,
+    );
+    expect(html).toContain("Add &lt;b&gt;mode&lt;/b&gt;");
+    expect(html).toContain("all done");
+    expect(html).not.toContain("<b>mode</b>");
+  });
+
+  it("omits the meta line entirely when no model/tokens (opt-in off)", () => {
+    const html = renderTooltipHtml({ sessions: [snap("working", { project: "p" })], theme: "kitchen" }, NOW);
+    expect(html).not.toContain("↑");
+    // The meta line's unique signature (distinct from the badge's opacity:0.55).
+    expect(html).not.toContain("opacity:0.5;font-size");
+  });
 });

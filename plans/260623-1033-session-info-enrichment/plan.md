@@ -1,7 +1,7 @@
 ---
 title: "Session info enrichment (Group C+D)"
 description: "Hiển thị thêm thông tin mỗi session: tool input / cwd / notification / prompt (hook), và model / task summary / last message / tokens (đọc transcript Claude). Mở rộng tính năng running-sessions list."
-status: in-progress
+status: done
 priority: P3
 branch: "feat/running-sessions-multi-surface"
 tags: [tauri, rust, protocol, hook, transcript, privacy, enrichment]
@@ -27,7 +27,7 @@ Mở rộng "running sessions list" (đã ship: `plans/260623-0913-running-sessi
 | Phase | Name | Status |
 |-------|------|--------|
 | 1 | [Hook payload enrichment](./phase-01-hook-payload-enrichment.md) | ✅ Done (2026-06-23) |
-| 2 | [Transcript enrichment for Claude](./phase-02-transcript-enrichment-for-claude.md) | Pending |
+| 2 | [Transcript enrichment for Claude](./phase-02-transcript-enrichment-for-claude.md) | ✅ Done (2026-06-23) |
 
 ## Dependencies
 
@@ -69,4 +69,4 @@ Mọi field mới CHẢY qua `SessionTracker` → `SessionSnapshot` → render (
 
 - ✅ **(Phase 1, resolved 2026-06-23)** Field hiển thị: cả 4 (tool_input, full cwd, notification text, user prompt).
 - ✅ **(Phase 1, resolved)** Layout: "compact pet, rich HUD" — pet tooltip gọn (enriched tool line + notification text; cwd/prompt vào hover title); HUD/popover thêm dòng detail.
-- **(Phase 2, mở)** Đọc transcript ở `copet-hook` (Rust) hay Tauri app? — phase-02 doc nghiêng về hook-side (đọc tail JSONL, throttle); chốt khi triển khai Phase 2.
+- ✅ **(Phase 2, resolved 2026-06-23)** Đọc transcript ở `copet-hook` (Rust), trong `transcript.rs` gọi từ `main.rs` (giữ map_claude pure). Opt-in qua `~/.copet/hook-config.json`. Throttle = bounded 256KB tail-read. Summary lấy từ `ai-title` (schema thật, không có dòng `summary`).

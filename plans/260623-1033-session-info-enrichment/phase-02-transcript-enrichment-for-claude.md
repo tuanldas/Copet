@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Transcript enrichment for Claude"
-status: pending
+status: done
 priority: P3
 dependencies: [1]
 effort: "~2d"
@@ -45,11 +45,22 @@ JSONL: mỗi dòng 1 message `{role, content, model, usage:{input_tokens,output_
 
 ## Success Criteria
 
-- [ ] Opt-in ON + session Claude → hiện model + tóm tắt + tin nhắn cuối + tokens.
-- [ ] Opt-in OFF (mặc định) → KHÔNG đọc transcript, không hiện field này.
-- [ ] File transcript thiếu/hỏng → bỏ qua, agent không bị chặn.
-- [ ] Codex/Gemini/wrapper không bị ảnh hưởng.
-- [ ] cargo test/clippy + pnpm test/tsc sạch.
+- [x] Opt-in ON + session Claude → hiện model + tóm tắt + tin nhắn cuối + tokens.
+- [x] Opt-in OFF (mặc định) → KHÔNG đọc transcript, không hiện field này.
+- [x] File transcript thiếu/hỏng → bỏ qua, agent không bị chặn (no panic; default None).
+- [x] Codex/Gemini/wrapper không bị ảnh hưởng.
+- [x] cargo test/clippy + pnpm test/tsc sạch.
+
+## Implementation Notes (done 2026-06-23)
+
+- **Schema thật khác plan**: KHÔNG có dòng `summary`. Dùng `ai-title.aiTitle` cho summary; model = `assistant.message.model`; tokens = `message.usage` (input + cache_read + cache_creation, output_tokens); last_message = quét ngược tìm assistant có text block (dòng cuối thường chỉ `tool_use`). Đã verify trên transcript thật.
+- **transcript.rs** (mới): `read_tail` (đọc tail ≤256KB, bỏ dòng đầu partial) + `parse_transcript` (pure, last-wins) + `maybe_enrich` + `transcript_enabled`. Lỗi → None, không panic, không log nội dung.
+- **map_claude giữ pure**: enrichment gọi ở `main.rs` sau dispatch (chỉ agent claude) → giữ `#[path]` integration test biên dịch được.
+- **Opt-in**: `copet_config_path()` (protocol) = `~/.copet/hook-config.json` `{"read_transcript":bool}`. App ghi (`set_transcript_optin`: store + file), hook đọc. Env var không qua được ranh giới process agent→hook nên phải dùng file. Settings toggle có cảnh báo riêng tư, mặc định off.
+- **Render**: pet = meta line model + tokens (↑/↓), summary/last_message vào hover title; HUD = model badge + tokens + dòng summary, last_message vào title. `session-format.ts` (`formatTokens`, `shortModel`) dùng chung.
+- **Throttle** = bounded tail-read (stateless hook không time-throttle dễ).
+- Docs: `docs/agent-hook-setup.md` thêm mục enrichment + privacy.
+- Review: `plans/reports/from-cook-self-review-260623-1403-phase2-transcript-enrichment-review.md` (Status DONE).
 
 ## Risk Assessment
 

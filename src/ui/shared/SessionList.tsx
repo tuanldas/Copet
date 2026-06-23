@@ -14,6 +14,7 @@ import { getStateLabel } from "../../agent-bridge/state-labels.js";
 import { formatDuration } from "./session-duration.js";
 import { agentBadge } from "./agent-badge.js";
 import { sortSessions, isFaded, displayName } from "./session-list-model.js";
+import { formatTokens, shortModel } from "./session-format.js";
 
 /** AgentState → design-token colour variable (matches the rest of the HUD). */
 const STATE_COLOR: Record<AgentState, string> = {
@@ -44,10 +45,12 @@ const SessionList: Component<SessionListProps> = (props) => {
             const label = () => getStateLabel(props.theme(), s.state);
             const dur = () => formatDuration(props.now() - s.since);
             const act = () => formatDuration(props.now() - s.ts);
-            // Hover title exposes the full cwd without widening the row.
+            // Hover title exposes full cwd + last assistant message without
+            // widening the row.
             const nameTitle = () => {
               const parts = [displayName(s)];
               if (s.cwdFull) parts.push(s.cwdFull);
+              if (s.lastMessage) parts.push(s.lastMessage);
               return parts.join("\n");
             };
             // Rich third line: the concrete command/file while working, else the
@@ -56,6 +59,11 @@ const SessionList: Component<SessionListProps> = (props) => {
               if (s.state === "working" && s.toolInput) return s.toolInput;
               if (s.prompt) return `> ${s.prompt}`;
               return "";
+            };
+            // Transcript tokens (opt-in): "↑248k ↓1.2k". Empty when absent.
+            const tokens = () => {
+              if (s.tokensIn == null && s.tokensOut == null) return "";
+              return `↑${formatTokens(s.tokensIn ?? 0)} ↓${formatTokens(s.tokensOut ?? 0)}`;
             };
             return (
               <div class={`session-row${isFaded(s.state) ? " is-faded" : ""}`} role="listitem">
@@ -68,6 +76,9 @@ const SessionList: Component<SessionListProps> = (props) => {
                   <div class="session-line1">
                     <Show when={agentBadge(s.agent)}>
                       <span class="session-badge">{agentBadge(s.agent)}</span>
+                    </Show>
+                    <Show when={s.model}>
+                      <span class="session-model">{shortModel(s.model!)}</span>
                     </Show>
                     <span class="session-name" title={nameTitle()}>
                       {displayName(s)}
@@ -84,8 +95,16 @@ const SessionList: Component<SessionListProps> = (props) => {
                     <Show when={s.state === "waiting" && s.message}>
                       <span class="session-message">· {s.message}</span>
                     </Show>
+                    <Show when={tokens()}>
+                      <span class="session-tokens">· {tokens()}</span>
+                    </Show>
                     <span class="session-activity">· {act()} trước</span>
                   </div>
+                  <Show when={s.summary}>
+                    <div class="session-summary" title={s.summary!}>
+                      ≡ {s.summary}
+                    </div>
+                  </Show>
                   <Show when={detail()}>
                     <div class="session-detail" title={detail()}>
                       {detail()}

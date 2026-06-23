@@ -130,8 +130,23 @@ function _handleEvent(
   petHandle: PetHandle,
   tooltipHandle: TooltipHandle,
 ): void {
-  const { session_id, state, ts, agent, project, tool, tool_input, cwd_full, message, prompt } =
-    event;
+  const {
+    session_id,
+    state,
+    ts,
+    agent,
+    project,
+    tool,
+    tool_input,
+    cwd_full,
+    message,
+    prompt,
+    model,
+    summary,
+    last_message,
+    tokens_in,
+    tokens_out,
+  } = event;
 
   // Update session tracker (enrichment fields bundled as the trailing info arg).
   _tracker.update(session_id, state, ts, agent, project, tool, {
@@ -139,6 +154,11 @@ function _handleEvent(
     cwdFull: cwd_full,
     message,
     prompt,
+    model,
+    summary,
+    lastMessage: last_message,
+    tokensIn: tokens_in,
+    tokensOut: tokens_out,
   });
 
   // XP + token accounting: applyAgentXp is the SOLE writer.

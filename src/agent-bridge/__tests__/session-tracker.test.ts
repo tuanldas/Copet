@@ -265,5 +265,27 @@ describe("SessionTracker — list()", () => {
     expect(s.cwdFull).toBeNull();
     expect(s.message).toBeNull();
     expect(s.prompt).toBeNull();
+    expect(s.model).toBeNull();
+    expect(s.summary).toBeNull();
+    expect(s.lastMessage).toBeNull();
+    expect(s.tokensIn).toBeNull();
+    expect(s.tokensOut).toBeNull();
+  });
+
+  it("stores transcript enrichment fields from the info arg", () => {
+    const t = new SessionTracker();
+    t.update("a", "working", NOW_S, "claude-code", "proj", "Bash", {
+      model: "claude-opus-4-8",
+      summary: "Add dark mode",
+      lastMessage: "Done with the toggle",
+      tokensIn: 248000,
+      tokensOut: 1219,
+    });
+    const s = t.list()[0];
+    expect(s.model).toBe("claude-opus-4-8");
+    expect(s.summary).toBe("Add dark mode");
+    expect(s.lastMessage).toBe("Done with the toggle");
+    expect(s.tokensIn).toBe(248000);
+    expect(s.tokensOut).toBe(1219);
   });
 });

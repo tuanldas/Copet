@@ -84,6 +84,12 @@ pub fn parse(json: &str) -> Option<AgentEvent> {
         cwd_full,
         message,
         prompt,
+        // Transcript fields are filled later by transcript::maybe_enrich (opt-in).
+        model: None,
+        summary: None,
+        last_message: None,
+        tokens_in: None,
+        tokens_out: None,
         ts: unix_now(),
     })
 }

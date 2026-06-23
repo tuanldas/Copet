@@ -82,6 +82,27 @@ Claude Code passes a JSON payload on stdin for every hook invocation.
 
 All other hook events are silently ignored (hook always exits 0).
 
+### Session info enrichment
+
+Beyond the state, `copet-hook` surfaces extra per-session info shown in the HUD,
+tray popover and pet tooltip:
+
+- **From the hook payload (always on, no file reads):** the condensed tool input
+  (`Bash: pnpm test`, `Edit: main.ts`), full `cwd`, notification text while
+  `waiting`, and the latest user prompt. Codex / Gemini provide a subset; the
+  universal wrapper provides none.
+- **From the transcript (Claude only, opt-in — OFF by default):** model
+  (`claude-opus-4-8`), task summary (Claude's `ai-title`), last assistant message
+  and token usage. Enable it in **Settings → "Model & tóm tắt task"**.
+
+> **Privacy:** the transcript option makes `copet-hook` read the conversation
+> JSONL at `transcript_path`. It is disabled unless you turn it on. When enabled,
+> the hook reads only a bounded tail of the file, caps the length of extracted
+> text, and never logs or persists raw conversation. The opt-in flag is stored in
+> `~/.copet/hook-config.json` (`{"read_transcript": true}`) — the channel the app
+> uses to tell the separately-spawned hook process about the setting. Delete that
+> file or toggle the setting off to disable.
+
 ---
 
 ## OpenAI Codex

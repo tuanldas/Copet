@@ -101,6 +101,37 @@ pub fn set_label_theme(app: AppHandle, theme: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Write the hook-readable config file (`~/.copet/hook-config.json`).
+///
+/// This is the channel through which the app tells the separately-spawned
+/// copet-hook process about opt-ins — env vars cannot cross that boundary.
+fn write_hook_config(read_transcript: bool) -> Result<(), String> {
+    let path = copet_protocol::copet_config_path()
+        .ok_or_else(|| "cannot resolve home directory".to_string())?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let body = serde_json::json!({ "read_transcript": read_transcript });
+    let text = serde_json::to_string_pretty(&body).map_err(|e| e.to_string())?;
+    std::fs::write(&path, text).map_err(|e| e.to_string())
+}
+
+/// Persist the transcript-reading opt-in (Claude model/summary/tokens enrichment).
+///
+/// PRIVACY: reading the transcript means reading conversation content, so this is
+/// OFF by default and only ever enabled by an explicit user action here. Writes
+/// both the Tauri store (Settings UI state) and the hook-config file (read by
+/// copet-hook on each event).
+#[tauri::command]
+pub fn set_transcript_optin(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let store = app
+        .store("copet-settings.json")
+        .map_err(|e| e.to_string())?;
+    store.set("transcript_optin", serde_json::json!(enabled));
+    store.save().map_err(|e| e.to_string())?;
+    write_hook_config(enabled)
+}
+
 /// Read persisted settings for the Settings panel.
 /// Returns the stored shortcut string and selected pet id (with defaults).
 /// Settings calls this on mount to restore UI state after restart.
@@ -129,10 +160,16 @@ pub fn get_settings(app: AppHandle) -> Result<serde_json::Value, String> {
         .and_then(|v| v.as_str().map(|s| s.to_owned()))
         .unwrap_or_else(|| DEFAULT_THEME.to_owned());
 
+    let transcript_optin = store
+        .get("transcript_optin")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
     Ok(serde_json::json!({
         "shortcut": shortcut,
         "selected_pet": selected_pet,
         "label_theme": label_theme,
+        "transcript_optin": transcript_optin,
     }))
 }
 

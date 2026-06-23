@@ -52,6 +52,18 @@ export interface AgentEvent {
   /** Most recent user prompt (Claude UserPromptSubmit). */
   prompt: string | null;
 
+  // ── Transcript enrichment (Claude only, opt-in; null when disabled). ──
+  /** Model id from the last assistant turn, e.g. "claude-opus-4-8". */
+  model: string | null;
+  /** Task title / summary (Claude's ai-title). */
+  summary: string | null;
+  /** Last assistant text message (truncated). */
+  last_message: string | null;
+  /** Input/context tokens of the last assistant turn (input + cache). */
+  tokens_in: number | null;
+  /** Output tokens of the last assistant turn. */
+  tokens_out: number | null;
+
   /** Unix timestamp in seconds. */
   ts: number;
 }

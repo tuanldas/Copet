@@ -20,6 +20,7 @@ import {
   setGlobalShortcut,
   selectPet,
   setLabelTheme,
+  setTranscriptOptin,
   getSettings,
   resetPetPosition,
   installHook,
@@ -111,6 +112,23 @@ const Settings: Component = () => {
     }
   }
 
+  // ── Transcript enrichment opt-in (privacy-sensitive, default off) ────────────
+  const [transcriptOptin, setTranscriptOptinSig] = createSignal(false);
+  const [transcriptBusy, setTranscriptBusy] = createSignal(false);
+
+  async function handleTranscriptToggle(): Promise<void> {
+    const next = !transcriptOptin();
+    setTranscriptBusy(true);
+    try {
+      await setTranscriptOptin(next);
+      setTranscriptOptinSig(next);
+    } catch {
+      // Leave toggle unchanged on error.
+    } finally {
+      setTranscriptBusy(false);
+    }
+  }
+
   // ── Reduced-motion ──────────────────────────────────────────────────────────
   const [reducedMotion, setReducedMotion] = createSignal(false);
 
@@ -188,6 +206,7 @@ const Settings: Component = () => {
       setShortcut(saved.shortcut);
       setSelectedPet(saved.selected_pet);
       setLabelThemeSig(saved.label_theme);
+      setTranscriptOptinSig(saved.transcript_optin);
     } catch {
       // First launch or store unavailable — keep signal defaults.
     }
@@ -296,6 +315,29 @@ const Settings: Component = () => {
                 <span class="pet-option-name">{THEME_NAMES[t]}</span>
               </button>
             ))}
+          </div>
+        </section>
+
+        {/* ── Transcript enrichment (privacy opt-in) ───────────────────────── */}
+        <section class="settings-section" aria-labelledby="sec-transcript">
+          <h2 id="sec-transcript" class="settings-section-title">Model &amp; tóm tắt task</h2>
+          <p class="settings-hint">
+            Hiển thị model, tóm tắt task, tin nhắn cuối &amp; tokens cho session Claude.
+            <strong> Cần đọc nội dung transcript hội thoại</strong> — chỉ bật nếu bạn đồng ý.
+            Mặc định tắt. Chỉ áp dụng cho Claude Code.
+          </p>
+          <div class="settings-row settings-row--between">
+            <span class="settings-label">Đọc transcript để hiện model + tóm tắt</span>
+            <button
+              class={`toggle ${transcriptOptin() ? "toggle--on" : ""}`}
+              role="switch"
+              aria-checked={transcriptOptin()}
+              disabled={transcriptBusy()}
+              onClick={handleTranscriptToggle}
+              aria-label="Đọc transcript (model + tóm tắt task)"
+            >
+              <span class="toggle-thumb" />
+            </button>
           </div>
         </section>
 

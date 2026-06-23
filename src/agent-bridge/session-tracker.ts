@@ -27,6 +27,16 @@ export interface SessionEntry {
   message: string | null;
   /** Most recent user prompt (Claude only). */
   prompt: string | null;
+  /** Model id from the last assistant turn (transcript, opt-in). */
+  model: string | null;
+  /** Task title / summary (transcript ai-title, opt-in). */
+  summary: string | null;
+  /** Last assistant text message (transcript, opt-in). */
+  lastMessage: string | null;
+  /** Input/context tokens of the last assistant turn (opt-in). */
+  tokensIn: number | null;
+  /** Output tokens of the last assistant turn (opt-in). */
+  tokensOut: number | null;
 }
 
 /**
@@ -38,6 +48,11 @@ export interface SessionInfo {
   cwdFull?: string | null;
   message?: string | null;
   prompt?: string | null;
+  model?: string | null;
+  summary?: string | null;
+  lastMessage?: string | null;
+  tokensIn?: number | null;
+  tokensOut?: number | null;
 }
 
 export interface AggregateResult {
@@ -121,6 +136,11 @@ export class SessionTracker {
       cwdFull: info.cwdFull ?? null,
       message: info.message ?? null,
       prompt: info.prompt ?? null,
+      model: info.model ?? null,
+      summary: info.summary ?? null,
+      lastMessage: info.lastMessage ?? null,
+      tokensIn: info.tokensIn ?? null,
+      tokensOut: info.tokensOut ?? null,
     });
   }
 
@@ -141,6 +161,11 @@ export class SessionTracker {
       cwdFull: e.cwdFull,
       message: e.message,
       prompt: e.prompt,
+      model: e.model,
+      summary: e.summary,
+      lastMessage: e.lastMessage,
+      tokensIn: e.tokensIn,
+      tokensOut: e.tokensOut,
     }));
   }
 

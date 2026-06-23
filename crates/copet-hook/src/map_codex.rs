@@ -71,6 +71,11 @@ pub fn parse(json: &str) -> Option<AgentEvent> {
         cwd_full: p.cwd,
         message: None,
         prompt: None,
+        model: None,
+        summary: None,
+        last_message: None,
+        tokens_in: None,
+        tokens_out: None,
         ts: unix_now(),
     })
 }

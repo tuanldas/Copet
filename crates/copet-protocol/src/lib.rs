@@ -63,6 +63,24 @@ pub struct AgentEvent {
     #[serde(default)]
     pub prompt: Option<String>,
 
+    // ── Transcript enrichment (Claude only, opt-in). Populated by copet-hook
+    //    from the conversation JSONL when the user enables it; null otherwise. ──
+    /// Model id from the last assistant turn, e.g. "claude-opus-4-8".
+    #[serde(default)]
+    pub model: Option<String>,
+    /// Task title / summary (Claude's `ai-title`).
+    #[serde(default)]
+    pub summary: Option<String>,
+    /// Last assistant text message (truncated).
+    #[serde(default)]
+    pub last_message: Option<String>,
+    /// Input/context tokens of the last assistant turn (input + cache).
+    #[serde(default)]
+    pub tokens_in: Option<u64>,
+    /// Output tokens of the last assistant turn.
+    #[serde(default)]
+    pub tokens_out: Option<u64>,
+
     /// Unix timestamp in seconds.
     pub ts: u64,
 }
@@ -77,6 +95,20 @@ pub fn copet_socket_path() -> String {
     return format!(r"\\.\pipe\copet-{uid}");
     #[cfg(not(windows))]
     return format!("/tmp/copet-{uid}.sock");
+}
+
+/// Returns the path to the Copet hook config file shared between the Tauri app
+/// (writer) and copet-hook (reader): `~/.copet/hook-config.json`.
+///
+/// This is the only channel through which the app can tell the separately-spawned
+/// hook process about user opt-ins (e.g. transcript reading) — env vars do not
+/// cross the agent→hook process boundary. Returns None if the home dir is unknown.
+pub fn copet_config_path() -> Option<std::path::PathBuf> {
+    #[cfg(windows)]
+    let home = std::env::var_os("USERPROFILE");
+    #[cfg(not(windows))]
+    let home = std::env::var_os("HOME");
+    home.map(|h| std::path::Path::new(&h).join(".copet").join("hook-config.json"))
 }
 
 #[cfg(not(windows))]
@@ -112,6 +144,11 @@ mod tests {
             cwd_full: Some("/Users/dev/my-project".to_string()),
             message: None,
             prompt: None,
+            model: Some("claude-opus-4-8".to_string()),
+            summary: Some("Add dark mode".to_string()),
+            last_message: None,
+            tokens_in: Some(248_000),
+            tokens_out: Some(1_219),
             ts: 1_750_000_000,
         }
     }
@@ -128,6 +165,10 @@ mod tests {
         assert_eq!(back.project, ev.project);
         assert_eq!(back.tool_input, ev.tool_input);
         assert_eq!(back.cwd_full, ev.cwd_full);
+        assert_eq!(back.model, ev.model);
+        assert_eq!(back.summary, ev.summary);
+        assert_eq!(back.tokens_in, ev.tokens_in);
+        assert_eq!(back.tokens_out, ev.tokens_out);
         assert_eq!(back.ts, ev.ts);
     }
 
@@ -141,6 +182,18 @@ mod tests {
         assert!(ev.cwd_full.is_none());
         assert!(ev.message.is_none());
         assert!(ev.prompt.is_none());
+        assert!(ev.model.is_none());
+        assert!(ev.summary.is_none());
+        assert!(ev.last_message.is_none());
+        assert!(ev.tokens_in.is_none());
+        assert!(ev.tokens_out.is_none());
+    }
+
+    #[test]
+    fn config_path_ends_with_expected_suffix() {
+        if let Some(p) = copet_config_path() {
+            assert!(p.ends_with("hook-config.json"), "got: {p:?}");
+        }
     }
 
     #[test]

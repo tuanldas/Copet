@@ -75,11 +75,22 @@ export function setLabelTheme(theme: LabelTheme): Promise<void> {
   return invoke("set_label_theme", { theme });
 }
 
+/**
+ * Persist the transcript-reading opt-in (Claude model/summary/tokens enrichment).
+ * PRIVACY: enabling this lets copet-hook read conversation transcript files.
+ * Default OFF; only ever turned on by an explicit user toggle.
+ */
+export function setTranscriptOptin(enabled: boolean): Promise<void> {
+  return invoke("set_transcript_optin", { enabled });
+}
+
 export interface PersistedSettings {
   shortcut: string;
   selected_pet: string;
   /** Selected status-label theme (get_settings always returns it, default kitchen). */
   label_theme: LabelTheme;
+  /** Transcript-reading opt-in (default false). */
+  transcript_optin: boolean;
 }
 
 /**

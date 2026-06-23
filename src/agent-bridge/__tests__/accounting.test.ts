@@ -35,6 +35,11 @@ function makeEvent(overrides: Partial<AgentEvent> = {}): AgentEvent {
     cwd_full: null,
     message: null,
     prompt: null,
+    model: null,
+    summary: null,
+    last_message: null,
+    tokens_in: null,
+    tokens_out: null,
     ts: Math.floor(Date.now() / 1000),
     ...overrides,
   };

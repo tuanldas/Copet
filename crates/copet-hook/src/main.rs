@@ -9,6 +9,7 @@
 mod map_claude;
 mod map_codex;
 mod map_gemini;
+mod transcript;
 
 use copet_protocol::{copet_socket_path, AgentEvent};
 use std::io::{self, Read, Write};
@@ -33,10 +34,16 @@ fn main() {
     }
 
     // Map to canonical event; if no mapping exists, skip silently.
-    let event: AgentEvent = match dispatch(&agent_name, &stdin_buf) {
+    let mut event: AgentEvent = match dispatch(&agent_name, &stdin_buf) {
         Some(ev) => ev,
         None => std::process::exit(0),
     };
+
+    // Claude only: opt-in transcript enrichment (model / summary / tokens).
+    // No-op unless the user enabled it; never blocks or panics.
+    if agent_name == "claude" {
+        transcript::maybe_enrich(&mut event, &stdin_buf);
+    }
 
     // Serialize and send — ignore all socket errors (daemon may not be running).
     let _ = send_event(&event);

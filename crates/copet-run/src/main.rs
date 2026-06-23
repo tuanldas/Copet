@@ -50,6 +50,11 @@ fn main() -> ExitCode {
         cwd_full: None,
         message: None,
         prompt: None,
+        model: None,
+        summary: None,
+        last_message: None,
+        tokens_in: None,
+        tokens_out: None,
         ts: unix_now(),
     });
 
@@ -77,6 +82,11 @@ fn main() -> ExitCode {
                 cwd_full: None,
                 message: None,
                 prompt: None,
+                model: None,
+                summary: None,
+                last_message: None,
+                tokens_in: None,
+                tokens_out: None,
                 ts: unix_now(),
             });
             return ExitCode::FAILURE;
@@ -102,6 +112,11 @@ fn main() -> ExitCode {
         cwd_full: None,
         message: None,
         prompt: None,
+        model: None,
+        summary: None,
+        last_message: None,
+        tokens_in: None,
+        tokens_out: None,
         ts: unix_now(),
     });
 
