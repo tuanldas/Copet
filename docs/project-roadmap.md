@@ -26,6 +26,29 @@
 
 ---
 
+## Post-MVP Releases
+
+### Feature Release: Running Sessions List (Multi-Surface) — 2026-06-23 ✅ **SHIPPED**
+
+**Milestone:** Pet window broadcasts per-session snapshot via Tauri event `sessions-snapshot`; HUD + new tray popover + tooltip render multi-session list.
+
+**Key Changes:**
+- New shared types: `SessionSnapshot` (sessionId, agent, project, state, since, ts), `LabelTheme` enum (kitchen/mood/garden)
+- `SessionTracker` gains `since` per session, `list()` method, exported `PRIORITY` + comparator
+- New modules: `state-labels.ts` (3 selectable label themes), `session-duration.ts`, `label-theme-store.ts`, `session-list-model.ts`, `use-sessions.ts` hook, `SessionList.tsx` component
+- New tray popover window (`sessions` label, capability, sessions.html vite entry)
+- **Tray behavior changed:** Left-click now opens sessions popover (pet visibility moved to tray menu + global shortcut)
+- `Cargo.toml`: `tauri-plugin-positioner` now has `features = ["tray-icon"]` for Rust-side tray positioning (Position::TrayBottomCenter)
+- New Rust command `set_label_theme`; `get_settings` now returns `label_theme` field
+- Removed `AgentStatusRow.tsx` (superseded by SessionList)
+- Status labels are theme-flavoured (Tamagotchi style, user-selectable); done/idle rows render dimmed; sessions expire after 5 min inactivity
+
+**Tests:** 261 vitest + Rust tests passing; tsc clean; cargo check/clippy clean.
+
+**Status:** Complete; ready for users.
+
+---
+
 ## Post-MVP Roadmap (Prioritized)
 
 ### P-1: Bug Fixes & Critical Issues (if any)
@@ -269,6 +292,6 @@ Every 3 months:
 
 ---
 
-**Last Updated:** 2026-06-22  
-**Status:** MVP complete; roadmap ready for post-release execution  
-**Next Review:** 2026-07-22 (1 month post-release)
+**Last Updated:** 2026-06-23  
+**Status:** MVP + running-sessions feature complete; ready for P-1 bug fixes or P-2 distribution  
+**Next Review:** 2026-07-23 (1 month post-sessions-release)

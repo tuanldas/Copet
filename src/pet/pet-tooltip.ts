@@ -1,30 +1,25 @@
 /**
- * pet-tooltip.ts — DOM overlay tooltip for the pet canvas.
+ * pet-tooltip.ts — DOM overlay tooltip listing running sessions.
  *
- * Shows agent/state/project/sessionCount on mouseenter over the pet body.
- * Hides on mouseleave. No external deps — pure DOM.
+ * Shows the session list on hover over the pet body and refreshes the duration
+ * column every second while visible. Rendering is delegated to the pure
+ * renderTooltipHtml() helper (unit-tested separately).
  *
  * Usage:
  *   const tooltip = mountTooltip(canvas, () => handle.getPosition());
- *   tooltip.update({ agent, state, project, sessionCount });
+ *   tooltip.update({ sessions, theme });
  *   tooltip.destroy(); // on unmount
  */
 
-import type { AgentId, AgentState } from "../types/agent-event.js";
+import { renderTooltipHtml, type TooltipData } from "./tooltip-render.js";
 
-/** Data shown in the tooltip overlay. */
-export interface TooltipData {
-  agent: AgentId | null;
-  state: AgentState;
-  project: string | null;
-  sessionCount: number;
-}
+export type { TooltipData };
 
 /** Public handle returned by mountTooltip(). */
 export interface TooltipHandle {
-  /** Update tooltip text (call on every aggregate re-compute). */
+  /** Update tooltip data (call on every aggregate re-compute / theme change). */
   update(data: TooltipData): void;
-  /** Remove DOM elements and event listeners. */
+  /** Remove DOM elements, listeners, and the refresh timer. */
   destroy(): void;
 }
 
@@ -42,47 +37,63 @@ export function mountTooltip(
   canvas: HTMLCanvasElement,
   getPosition: () => { x: number; y: number },
 ): TooltipHandle {
-  // ── Create tooltip element ─────────────────────────────────────────────────
   const el = document.createElement("div");
   el.id = "pet-tooltip";
   el.setAttribute("role", "tooltip");
-  el.setAttribute("aria-live", "polite");
   applyBaseStyles(el);
   el.style.display = "none";
 
-  // Sibling of canvas — avoids DPR transform inheritance
+  // Sibling of canvas — avoids DPR transform inheritance.
   const parent = canvas.parentElement ?? document.body;
   parent.appendChild(el);
 
-  // ── Current data (mutable via handle.update) ───────────────────────────────
-  let _current: TooltipData = {
-    agent: null,
-    state: "idle",
-    project: null,
-    sessionCount: 0,
-  };
+  let _current: TooltipData = { sessions: [], theme: "kitchen" };
+  let _lastXY: { x: number; y: number } | null = null;
+  let _tick = 0;
 
-  // ── Inner show/hide (close over el and _current) ───────────────────────────
+  const nowS = (): number => Math.floor(Date.now() / 1000);
+
+  function paint(): void {
+    el.innerHTML = renderTooltipHtml(_current, nowS());
+  }
+
+  function startTick(): void {
+    if (_tick) return;
+    _tick = window.setInterval(paint, 1000);
+  }
+
+  function stopTick(): void {
+    if (_tick) {
+      clearInterval(_tick);
+      _tick = 0;
+    }
+  }
+
   function show(cx: number, cy: number): void {
-    renderContent(el, _current);
+    paint();
     positionTooltip(el, cx, cy);
     el.style.display = "block";
+    startTick();
   }
 
   function hide(): void {
     el.style.display = "none";
+    stopTick();
   }
 
-  // ── Mouse handlers ─────────────────────────────────────────────────────────
   const onEnter = (e: Event): void => {
     const me = e as MouseEvent;
-    if (overPet(me)) show(me.clientX, me.clientY);
+    if (overPet(me)) {
+      _lastXY = { x: me.clientX, y: me.clientY };
+      show(me.clientX, me.clientY);
+    }
   };
 
   const onMove = (e: Event): void => {
     if (el.style.display === "none") return;
     const me = e as MouseEvent;
     if (overPet(me)) {
+      _lastXY = { x: me.clientX, y: me.clientY };
       positionTooltip(el, me.clientX, me.clientY);
     } else {
       hide();
@@ -103,17 +114,17 @@ export function mountTooltip(
   canvas.addEventListener("mousemove", onMove);
   canvas.addEventListener("mouseleave", onLeave);
 
-  // ── Public handle ──────────────────────────────────────────────────────────
   return {
     update(data: TooltipData): void {
       _current = data;
-      // Re-render in-place if tooltip is currently visible
       if (el.style.display !== "none") {
-        renderContent(el, _current);
+        paint();
+        if (_lastXY) positionTooltip(el, _lastXY.x, _lastXY.y);
       }
     },
 
     destroy(): void {
+      stopTick();
       canvas.removeEventListener("mouseenter", onEnter);
       canvas.removeEventListener("mousemove", onMove);
       canvas.removeEventListener("mouseleave", onLeave);
@@ -122,12 +133,12 @@ export function mountTooltip(
   };
 }
 
-// ── Pure rendering helpers ────────────────────────────────────────────────────
+// ── Pure positioning + styles ─────────────────────────────────────────────────
 
 function positionTooltip(el: HTMLDivElement, cx: number, cy: number): void {
   const vw = window.innerWidth;
-  const tooltipW = 200;
-  const tooltipH = 52;
+  const tooltipW = 220;
+  const tooltipH = Math.max(40, el.offsetHeight || 60);
   const offset = 12;
 
   let left = cx + offset;
@@ -138,36 +149,6 @@ function positionTooltip(el: HTMLDivElement, cx: number, cy: number): void {
 
   el.style.left = `${left}px`;
   el.style.top = `${top}px`;
-}
-
-function renderContent(el: HTMLDivElement, data: TooltipData): void {
-  const agentLabel = data.agent ?? "agent";
-  const projectPart = data.project ? ` · ${escHtml(data.project)}` : "";
-  const stateLabel = `${stateSymbol(data.state)} ${escHtml(data.state)}`;
-  const countPart = data.sessionCount > 1 ? ` (${data.sessionCount} sessions)` : "";
-
-  el.innerHTML =
-    `<div style="font-weight:600">${escHtml(agentLabel)}${projectPart}</div>` +
-    `<div style="opacity:0.8">${stateLabel}${escHtml(countPart)}</div>`;
-}
-
-function stateSymbol(state: AgentState): string {
-  const map: Record<AgentState, string> = {
-    working: "⚙",
-    waiting: "⏳",
-    done: "✓",
-    error: "✗",
-    idle: "·",
-  };
-  return map[state] ?? "·";
-}
-
-function escHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 function applyBaseStyles(el: HTMLDivElement): void {
@@ -181,9 +162,8 @@ function applyBaseStyles(el: HTMLDivElement): void {
     fontSize: "12px",
     lineHeight: "1.5",
     pointerEvents: "none",
-    whiteSpace: "nowrap",
     boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
     fontFamily: "system-ui, sans-serif",
-    maxWidth: "240px",
+    maxWidth: "260px",
   });
 }

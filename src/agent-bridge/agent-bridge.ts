@@ -19,11 +19,12 @@
  * successive turns trigger the celebrate/error animation each time.
  */
 
-import { listen } from "@tauri-apps/api/event";
+import { listen, emit } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import type { AgentEvent, AgentState } from "../types/agent-event.js";
 import { SessionTracker } from "./session-tracker.js";
 import { getReaction } from "./reaction-map.js";
+import { getCurrentTheme, initLabelTheme, onThemeChange } from "../ui/shared/label-theme-store.js";
 import { petStore } from "../pet/pet-state-machine.js";
 import { applyAgentXp } from "../tamagotchi/index.js";
 import type { PetHandle } from "../pet/index.js";
@@ -54,10 +55,25 @@ let _lastEffective: AgentState = "idle";
 /** Unlisten function returned by `listen()`. */
 let _unlisten: (() => void) | null = null;
 
+/** Unlisten for `label-theme-changed` (tooltip refresh only). */
+let _themeUnlisten: (() => void) | null = null;
+
 /** Expire-stale interval handle. */
 let _expireInterval = 0;
 
 const _tracker = new SessionTracker();
+
+/**
+ * Broadcast the current session list to all windows (HUD, tray popover) so they
+ * can render the running-sessions view. The pet window owns the tracker and is
+ * the sole emitter; it does NOT listen to its own broadcast (the tooltip reads
+ * the tracker directly).
+ */
+function _broadcast(): void {
+  emit("sessions-snapshot", _tracker.list()).catch((err: unknown) => {
+    console.warn("[agent-bridge] sessions-snapshot emit failed:", err);
+  });
+}
 
 /**
  * Initialize the agent bridge. Call once after mountPet() in the pet window.
@@ -75,12 +91,21 @@ export async function initAgentBridge(
     _handleEvent(ev.payload, petHandle, tooltipHandle);
   });
 
+  // Label theme: load once + refresh the tooltip on change. This deliberately
+  // refreshes ONLY the tooltip — it must not re-run _reAggregate, which would
+  // replay the one-shot done/error pet animations on a mere theme switch.
+  void initLabelTheme();
+  _themeUnlisten = await onThemeChange(() => {
+    tooltipHandle.update({ sessions: _tracker.list(), theme: getCurrentTheme() });
+  });
+
   // ── 2. Expire stale sessions on interval ────────────────────────────────────
   _expireInterval = window.setInterval(() => {
     const nowMs = Date.now();
     const removed = _tracker.expireStale(nowMs, SESSION_TIMEOUT_MS);
     if (removed) {
       _reAggregate(petHandle, tooltipHandle);
+      _broadcast();
     }
     // Prune _xpDedup: remove entries whose ts is older than SESSION_TIMEOUT.
     // Key format is `${session_id}:${ts}` where ts is epoch seconds.
@@ -126,6 +151,7 @@ function _handleEvent(
   }
 
   _reAggregate(petHandle, tooltipHandle);
+  _broadcast();
 }
 
 /**
@@ -139,15 +165,13 @@ function _handleEvent(
  * - Tray: only updated when effectiveState changes (loop or one-shot).
  */
 function _reAggregate(petHandle: PetHandle, tooltipHandle: TooltipHandle): void {
-  const { effectiveState, sessionCount, latest } = _tracker.aggregate();
+  const { effectiveState } = _tracker.aggregate();
   const reaction = getReaction(effectiveState);
 
-  // ── Tooltip: always update ─────────────────────────────────────────────────
+  // ── Tooltip: always update (full session list + current theme) ─────────────
   tooltipHandle.update({
-    agent: latest?.agent ?? null,
-    state: effectiveState,
-    project: latest?.project ?? null,
-    sessionCount,
+    sessions: _tracker.list(),
+    theme: getCurrentTheme(),
   });
 
   const stateChanged = effectiveState !== _lastEffective;
@@ -185,6 +209,8 @@ function _reAggregate(petHandle: PetHandle, tooltipHandle: TooltipHandle): void 
 function _cleanup(): void {
   _unlisten?.();
   _unlisten = null;
+  _themeUnlisten?.();
+  _themeUnlisten = null;
   if (_expireInterval) {
     clearInterval(_expireInterval);
     _expireInterval = 0;

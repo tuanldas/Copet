@@ -126,8 +126,9 @@ Agent state flows: Agent CLI (hook or wrapper) → Unix socket → Tauri daemon 
 - Handles multi-session aggregation (session_id tracking)
 
 #### init_tray()
-- **tray.rs:** System tray icon (toggles pet visibility)
-- Menu: Show/Hide pet, open HUD/Settings/Shop, quit
+- **tray.rs:** System tray icon + popover sessions window
+- Left-click tray → toggle sessions popover (TrayBottomCenter, Rust-side positioner)
+- Menu (right-click): Show/Hide pet, open HUD/Settings/Shop, quit
 - Icon color changes per dominant agent state (working=blue, waiting=amber, done=green, error=red, idle=gray)
 
 ### 2. Commands (src-tauri/src/commands/)
@@ -136,10 +137,12 @@ Agent state flows: Agent CLI (hook or wrapper) → Unix socket → Tauri daemon 
 |---------|--------|---------|
 | `set_pet_hit_rect(x, y, w, h)` | lib.rs | Frontend reports pet's interactive rect for click-through hit-test |
 | `open_hud`, `open_settings`, `open_shop` | window_commands.rs | Show/focus specific windows |
+| (sessions popover) | tray.rs | `toggle_sessions_popover` — tray left-click shows/hides the popover (no IPC command) |
 | `toggle_pet` | window_commands.rs | Show/hide pet window |
 | `reset_pet_position` | window_commands.rs | Revert to center-screen |
 | `enable_autostart`, `is_autostart_enabled` | system_commands.rs | Manage boot launch |
 | `set_global_shortcut`, `get_settings`, `select_pet` | system_commands.rs | Settings panel |
+| `set_label_theme`, `get_settings` | system_commands.rs | Get/set label theme (kitchen/mood/garden) |
 | `set_tray_state` | system_commands.rs | Update tray icon color per agent state |
 | `install_hook`, `uninstall_hook`, `hook_status` | install_commands.rs | Hook setup in Settings (copy/uninstall scripts) |
 
@@ -221,7 +224,7 @@ Agent state flows: Agent CLI (hook or wrapper) → Unix socket → Tauri daemon 
 - On exit: emit AgentEvent(state=Done or Error per exit code)
 - Minimal overhead; logs to stderr
 
-## Data Flow: Agent Event → Pet Reaction
+## Data Flow: Agent Event → Pet Reaction & Sessions Broadcast
 
 ```
 Agent CLI generates hook JSON
@@ -238,18 +241,27 @@ Emit tauri::Event::agent-state-changed
         ↓
 Pet window (initAgentBridge) receives event
         ↓
-session-tracker aggregates state (working > waiting > done > idle)
+session-tracker updates: builds SessionSnapshot[] + emits sessions-snapshot event
+        ↓
+session-tracker also aggregates state (working > waiting > error > done > idle)
         ↓
 Pet animates: squash-stretch + glow (accent color)
         ↓
-Tooltip updated (agent name, state, project)
+───────────────────────────────────────────────────────────────
+│ Parallel: Multi-Surface Rendering                             │
+├──────────────────────┬──────────────────────┬─────────────────┤
+│ HUD (stats)          │ Tray Popover         │ Tooltip          │
+│ - subscribe to       │ - subscribe to       │ - read tracker   │
+│   sessions-snapshot  │   sessions-snapshot  │   directly       │
+│ - render SessionList │ - render SessionList │ - show dominant  │
+│ - update every 1s    │ - update every 1s    │   agent + state  │
+└──────────────────────┴──────────────────────┴─────────────────┘
         ↓
 Tray icon color updated
-        ↓
-HUD updates agent status row (if open)
 ```
 
-**Latency:** Event → Animation <300ms (async Tauri event loop + Canvas frame).
+**Latency:** Event → Animation <300ms (async Tauri event loop + Canvas frame).  
+**Broadcast:** Pet emits `sessions-snapshot` after update/expire; each surface ticks independently for duration columns (~1s).
 
 ## Persistence & State Management
 
@@ -274,16 +286,21 @@ HUD updates agent status row (if open)
 
 **Note:** This is a known Tauri limitation (#13070). MVP ships with macOS-first transparency; Windows/Linux have best-effort behavior.
 
-## Multi-Session Aggregation
+## Multi-Session Aggregation & Broadcast
 
 When multiple agents send events (e.g., Claude Code + Cursor simultaneously):
 
-1. **session-tracker.ts** maintains a Map<session_id, AgentEvent>
-2. **Aggregation policy:** Pick dominant state in order: working > waiting > done > idle
-3. **Badge:** If >1 active session, show badge count in HUD agent row
-4. **Visual:** Glow color = dominant state color
+1. **session-tracker.ts** maintains a Map<session_id, SessionSnapshot>
+   - Per-session: `sessionId`, `agent`, `project`, `state`, `since` (streak start), `ts` (event time)
+   - `since` resets when session moves from done/error → working (new lQuantity)
+2. **Aggregation policy:** Pick dominant state in order: working > waiting > error > done > idle
+3. **Broadcast:** Pet window emits tauri::Event `sessions-snapshot` (SessionSnapshot[]) after each update/expire
+4. **Per-surface rendering:** HUD/tray popover/tooltip subscribe to `sessions-snapshot` and render the full list
+   - Sessions expire after 5 min inactivity
+   - done/idle rows render dimmed (opacity ~0.5)
+5. **Visual:** Sort by priority state then ts (newest first); glow color = dominant state
 
-Example: If Claude is "working" and Codex is "waiting", pet shows working state (blue glow).
+Example: 3 agents running (Claude working, Codex waiting, Gemini done) → all 3 listed in sessions popover; pet glows blue (working dominant).
 
 ## Windows (Tauri Config)
 
@@ -315,12 +332,20 @@ Example: If Claude is "working" and Codex is "waiting", pet shows working state 
       "label": "shop",
       "title": "Copet Shop",
       "visible": false
+    },
+    {
+      "label": "sessions",
+      "title": "Running Sessions",
+      "visible": false,
+      "width": 300,
+      "height": 360
     }
   ]
 }
 ```
 
-**macOS Private API:** `acceptFirstMouse` + `ActivationPolicy::Accessory` hide dock icon.
+**macOS Private API:** `acceptFirstMouse` + `ActivationPolicy::Accessory` hide dock icon.  
+**Tray Popover:** `sessions` window uses `tauri-plugin-positioner` Position::TrayBottomCenter for Rust-side positioning.
 
 ## Sequence Diagram: Start → First Agent Event
 
@@ -384,5 +409,5 @@ Stats persist to store
 
 ---
 
-**Last Updated:** 2026-06-22  
+**Last Updated:** 2026-06-23  
 **Maintainer:** docs-manager

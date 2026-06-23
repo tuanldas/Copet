@@ -10,6 +10,7 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     image::Image,
 };
+use tauri_plugin_positioner::{on_tray_event, Position, WindowExt};
 
 /// Tray icon PNG embedded at compile time — avoids runtime path resolution.
 static TRAY_ICON_BYTES: &[u8] = include_bytes!("../../icons/tray/tray.png");
@@ -92,13 +93,16 @@ pub fn init_tray(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         .on_menu_event(move |_app, event| {
             handle_menu_event(&handle_menu, event.id.as_ref());
         })
-        .on_tray_icon_event(move |_tray, event| {
-            // Left-click toggles pet visibility (same as Show/Hide menu item).
+        .on_tray_icon_event(move |tray, event| {
+            // Record the tray icon position so the positioner can anchor the popover.
+            on_tray_event(tray.app_handle(), &event);
+            // Left-click toggles the sessions popover. Pet visibility is via the
+            // tray menu ("Show / Hide Pet") and the global shortcut.
             if let TrayIconEvent::Click { button, button_state, .. } = event {
                 if button == MouseButton::Left && button_state == MouseButtonState::Up {
                     // Clone into the run_on_main_thread closure — avoids borrow+move conflict.
                     let h = handle_click.clone();
-                    let _ = handle_click.run_on_main_thread(move || toggle_pet_window(&h));
+                    let _ = handle_click.run_on_main_thread(move || toggle_sessions_popover(&h));
                 }
             }
         })
@@ -126,6 +130,24 @@ pub fn toggle_pet_window(app: &AppHandle) {
             let _ = win.hide();
         } else {
             let _ = win.show();
+            let _ = win.set_focus();
+        }
+    }
+}
+
+/// Toggle the sessions popover: show + anchor under the tray icon, or hide.
+///
+/// Positioning is done here (Rust-side `WindowExt::move_window`) rather than in
+/// JS, so the popover window needs no positioner capability. Requires the
+/// positioner plugin's `tray-icon` feature + `on_tray_event` (see init_tray).
+pub fn toggle_sessions_popover(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("sessions") {
+        let visible = win.is_visible().unwrap_or(false);
+        if visible {
+            let _ = win.hide();
+        } else {
+            let _ = win.show();
+            let _ = win.move_window(Position::TrayBottomCenter);
             let _ = win.set_focus();
         }
     }

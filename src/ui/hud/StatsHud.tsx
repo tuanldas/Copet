@@ -19,7 +19,9 @@ import type { PetData } from "../../tamagotchi/types.js";
 // Use canonical engine functions — single source of truth for XP math.
 import { xpWithinLevel, xpForCurrentLevel } from "../../tamagotchi/xp-level.js";
 import StatBar from "./StatBar.js";
-import AgentStatusRow from "./AgentStatusRow.js";
+import SessionList from "../shared/SessionList.js";
+import { createSessionsSignal, createThemeSignal, createNowSignal } from "../shared/use-sessions.js";
+import "../shared/session-list.css";
 
 // SVG arc ring constants (r=32, cx=40, cy=40).
 const RING_R = 32;
@@ -56,6 +58,11 @@ const StatsHud: Component = () => {
   const stage = () => pet().stage;
   const dashoffset = () => xpArcDashoffset(xp());
   const xpMax = () => xpForCurrentLevel(xp());
+
+  // Running-sessions list: live broadcast + theme + 1s clock for durations.
+  const sessions = createSessionsSignal();
+  const theme = createThemeSignal();
+  const now = createNowSignal();
 
   return (
     <div id="hud-root">
@@ -142,7 +149,7 @@ const StatsHud: Component = () => {
 
       {/* ── Agent status ──────────────────────────────────────────────────── */}
       <div class="hud-agent-section">
-        <AgentStatusRow />
+        <SessionList sessions={sessions} theme={theme} now={now} />
       </div>
     </div>
   );

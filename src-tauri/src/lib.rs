@@ -55,6 +55,7 @@ pub fn run() {
             commands::system_commands::set_global_shortcut,
             commands::system_commands::select_pet,
             commands::system_commands::get_settings,
+            commands::system_commands::set_label_theme,
             // Phase 07: agent state → tray icon
             commands::system_commands::set_tray_state,
             // Phase 08: hook install/uninstall/status

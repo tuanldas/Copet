@@ -39,6 +39,7 @@ export default defineConfig(async () => ({
         shop: "shop.html",
         hud: "hud.html",
         settings: "settings.html",
+        sessions: "sessions.html",
       },
     },
   },

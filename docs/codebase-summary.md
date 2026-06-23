@@ -126,12 +126,13 @@ export function computeTokenReward(toolCalls: number): number
 
 | Module | Files | Purpose |
 |--------|-------|---------|
-| **session-tracker.ts** | 1 | Track per-session AgentEvent; aggregate state (working > waiting > done > idle) |
-| **agent-bridge.ts** | 1 | Listen to tauri::Event → trigger pet reaction (glow + animation) |
+| **session-tracker.ts** | 1 | Track per-session SessionSnapshot; aggregate state (working > waiting > error > done > idle); emit sessions-snapshot event |
+| **agent-bridge.ts** | 1 | Listen to tauri::Event → trigger pet reaction (glow + animation); relay sessions-snapshot broadcast |
 | **reaction-map.ts** | 1 | Map AgentEvent state → pet animation sequence (quick squash-stretch + color flash) |
+| **state-labels.ts** | 1 | Label theme definitions (kitchen/mood/garden); getStateLabel(theme, state) → string |
 
 **Tests:** 2 files
-- session-tracker.test.ts → multi-session aggregation, state priority
+- session-tracker.test.ts → multi-session aggregation, state priority, since tracking
 - accounting.test.ts → token gen tracking across sessions
 
 **Key Exports:**
@@ -139,9 +140,16 @@ export function computeTokenReward(toolCalls: number): number
 // session-tracker.ts
 export class SessionTracker {
   update(event: AgentEvent): void
+  list(): SessionSnapshot[]
   getAggregatedState(): AgentState
   getActiveSessions(): number
 }
+export const PRIORITY = { working: 4, waiting: 3, error: 2, done: 1, idle: 0 }
+export function compareByPriorityThenTs(a: SessionSnapshot, b: SessionSnapshot): number
+
+// state-labels.ts
+export type LabelTheme = "kitchen" | "mood" | "garden"
+export function getStateLabel(theme: LabelTheme | undefined, state: AgentState): string
 
 // agent-bridge.ts
 export async function initAgentBridge(petHandle, tooltipHandle): Promise<void>
@@ -156,8 +164,7 @@ export function mapStateToReaction(state: AgentState): {glow: string, duration: 
 
 | File | Purpose |
 |------|---------|
-| StatsHud.tsx | Root SolidJS component; shows pet portrait, stat bars, level/XP ring, agent row |
-| AgentStatusRow.tsx | Agent name + state indicator dot + session count badge |
+| StatsHud.tsx | Root SolidJS component; shows pet portrait, stat bars, level/XP ring, SessionList |
 | StatBar.tsx | Single stat bar (color: green→amber→red per value) |
 | hud-entry.tsx | Entry point for HUD window; mounts StatsHud |
 | hud.css | Styling (card, grid, fonts) |
@@ -178,10 +185,23 @@ export function mapStateToReaction(state: AgentState): {glow: string, duration: 
 | shop-entry.tsx | Item card (icon, name, cost, Buy/Equip button); disable if can't afford |
 | shop.css | Grid, card styling |
 
+#### Sessions Popover (src/ui/sessions/)
+
+| File | Purpose |
+|------|---------|
+| sessions-entry.tsx | Entry point for sessions popover window; mounts SessionList |
+| sessions.css | Popover styling (card, overflow, session-row) |
+
 #### Shared (src/ui/shared/)
 
 | File | Purpose |
 |------|---------|
+| session-duration.ts | Format elapsed time from since (session streak start) |
+| label-theme-store.ts | SolidJS signal for current label theme; subscribe to label-theme-changed event |
+| session-list-model.ts | Compute session rows: sort by priority, apply theme labels, format for render |
+| use-sessions.ts | SolidJS hook: subscribe to sessions-snapshot event; expose sessions reactively |
+| SessionList.tsx | Shared component; render session list (3+ surfaces: HUD, popover, tooltip) |
+| session-list.css | Session row styling (state dot, theme label, duration, project, dimmed done/idle) |
 | tauri-commands.ts | Wrappers for all tauri::invoke commands (type-safe) |
 | design-tokens.css | Color palette, spacing, typography vars |
 
@@ -190,13 +210,21 @@ export function mapStateToReaction(state: AgentState): {glow: string, duration: 
 | File | Purpose |
 |------|---------|
 | agent-event.ts | TS mirror of copet-protocol/lib.rs; Agent, State, AgentEvent (keep in sync) |
+| session-snapshot.ts | SessionSnapshot (sessionId, agent, project, state, since, ts), LabelTheme enum |
+
+### Pet Tooltip (src/pet/)
+
+| File | Purpose |
+|------|---------|
+| tooltip-render.ts | Build HTML for tooltip: dominant session info + sorted session list (max 5 rows, +N more); uses theme labels |
 
 ### Entry Point
 
 | File | Purpose |
 |------|---------|
-| main.ts | App entry; init tamagotchi → mount pet → init agent bridge |
+| main.ts | App entry; init tamagotchi → mount pet → init agent bridge; set up sessions-snapshot listener for surfaces |
 | styles.css | Global styles (fonts, root colors) |
+| sessions.html | Vite multipage entry for sessions popover (root document) |
 
 ---
 
@@ -239,7 +267,7 @@ pub async fn spawn_daemon(app: AppHandle) -> Result<JoinHandle<()>>
 | Module | Purpose |
 |--------|---------|
 | **window_commands.rs** | open_hud, open_settings, open_shop, toggle_pet, reset_pet_position |
-| **system_commands.rs** | enable_autostart, set_global_shortcut, get_settings, select_pet, set_tray_state |
+| **system_commands.rs** | enable_autostart, set_global_shortcut, get_settings, select_pet, set_label_theme, set_tray_state |
 | **install_commands.rs** | install_hook, uninstall_hook, hook_status (copy/uninstall hook scripts) |
 | **mod.rs** | Module exports |
 
@@ -247,6 +275,7 @@ pub async fn spawn_daemon(app: AppHandle) -> Result<JoinHandle<()>>
 ```rust
 #[tauri::command]
 pub fn open_hud(window: WebviewWindow) -> Result<()>
+// sessions popover: toggled by tray left-click via tray::toggle_sessions_popover (not an IPC command)
 pub fn toggle_pet(window: WebviewWindow) -> Result<()>
 pub fn reset_pet_position(window: WebviewWindow) -> Result<()>
 ```
@@ -254,6 +283,8 @@ pub fn reset_pet_position(window: WebviewWindow) -> Result<()>
 **Key Fns (system_commands):**
 ```rust
 #[tauri::command]
+pub fn set_label_theme(handle: AppHandle, theme: String) -> Result<()>  // emit label-theme-changed event
+pub fn get_settings(handle: AppHandle) -> Result<Settings>  // includes label_theme field
 pub fn set_tray_state(handle: AppHandle, state: String) -> Result<()>  // update tray icon color
 pub fn set_global_shortcut(handle: AppHandle, hotkey: String) -> Result<()>
 ```
@@ -269,12 +300,13 @@ pub async fn hook_status(hook: String) -> Result<HookStatus>
 
 | Module | Purpose |
 |--------|---------|
-| **tray.rs** | Build TrayMenu (Show/Hide pet, open HUD/Settings/Shop, Quit) |
+| **tray.rs** | Build TrayMenu (Show/Hide pet, open HUD/Settings/Shop, Quit); handle left-click popover toggle + tray positioning |
 | **mod.rs** | Module exports |
 
 **Key Fn:**
 ```rust
 pub fn build_tray_menu() -> TrayMenu
+pub fn handle_tray_event(event: &str, app: &AppHandle)  // on_tray_event for left-click toggle; uses positioner
 pub fn update_tray_icon(handle: AppHandle, state: AgentState)  // color per state
 ```
 
@@ -461,10 +493,10 @@ cargo clippy --workspace
 
 | Metric | Count |
 |--------|-------|
-| Total files | 123 |
-| TypeScript/TSX | ~5500 LOC |
-| Rust (core + sidecars) | ~2800 LOC |
-| Test cases | ~240+ across vitest + Rust |
+| Total files | 135+ (post-sessions feature) |
+| TypeScript/TSX | ~6200 LOC |
+| Rust (core + sidecars) | ~3000 LOC |
+| Test cases | ~261 across vitest + Rust |
 | Build time (cold) | ~90s |
 | Build time (incremental) | ~10s |
 | DMG size (uncompressed) | ~10–12MB |
@@ -493,6 +525,6 @@ cargo clippy --workspace
 
 ---
 
-**Last Updated:** 2026-06-22  
+**Last Updated:** 2026-06-23  
 **Maintainer:** docs-manager  
-**Repomix Baseline:** 123 files, 141k tokens
+**Repomix Baseline:** 135+ files (post-sessions feature); ~155k tokens

@@ -7,6 +7,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
+import type { LabelTheme } from "../../types/session-snapshot.js";
 
 // ── Window commands ───────────────────────────────────────────────────────────
 
@@ -69,9 +70,16 @@ export function selectPet(petId: string): Promise<void> {
   return invoke("select_pet", { petId });
 }
 
+/** Persist the selected status-label theme (kitchen | mood | garden). */
+export function setLabelTheme(theme: LabelTheme): Promise<void> {
+  return invoke("set_label_theme", { theme });
+}
+
 export interface PersistedSettings {
   shortcut: string;
   selected_pet: string;
+  /** Selected status-label theme (get_settings always returns it, default kitchen). */
+  label_theme: LabelTheme;
 }
 
 /**

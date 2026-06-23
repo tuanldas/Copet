@@ -1,0 +1,58 @@
+/* session-list.css — shared styles for the running-sessions list (HUD + popover). */
+
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.session-empty {
+  padding: 8px 4px;
+  font-size: 12px;
+  text-align: center;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.session-row.is-faded {
+  opacity: 0.5;
+}
+
+.session-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.session-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.session-label {
+  flex: 0 0 auto;
+  opacity: 0.85;
+}
+
+.session-time {
+  flex: 0 0 auto;
+  min-width: 28px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}

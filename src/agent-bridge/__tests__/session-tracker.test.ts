@@ -173,3 +173,65 @@ describe("SessionTracker — full priority order verification", () => {
     }
   });
 });
+
+// ── since tracking ──────────────────────────────────────────────────────────
+
+describe("SessionTracker — since tracking", () => {
+  it("new session: since === ts", () => {
+    const t = new SessionTracker();
+    t.update("s1", "working", NOW_S, "claude-code", "p");
+    expect(t.list()[0].since).toBe(NOW_S);
+  });
+
+  it("working → working keeps since unchanged", () => {
+    const t = new SessionTracker();
+    t.update("s1", "working", NOW_S, "claude-code", "p");
+    t.update("s1", "working", NOW_S + 30, "claude-code", "p");
+    expect(t.list()[0].since).toBe(NOW_S);
+  });
+
+  it("waiting → working keeps since (same turn)", () => {
+    const t = new SessionTracker();
+    t.update("s1", "working", NOW_S, "claude-code", "p");
+    t.update("s1", "waiting", NOW_S + 10, "claude-code", "p");
+    t.update("s1", "working", NOW_S + 20, "claude-code", "p");
+    expect(t.list()[0].since).toBe(NOW_S);
+  });
+
+  it("done → working resets since (new turn)", () => {
+    const t = new SessionTracker();
+    t.update("s1", "working", NOW_S, "claude-code", "p");
+    t.update("s1", "done", NOW_S + 10, "claude-code", "p");
+    t.update("s1", "working", NOW_S + 20, "claude-code", "p");
+    expect(t.list()[0].since).toBe(NOW_S + 20);
+  });
+
+  it("error → working resets since", () => {
+    const t = new SessionTracker();
+    t.update("s1", "error", NOW_S, "claude-code", "p");
+    t.update("s1", "working", NOW_S + 5, "claude-code", "p");
+    expect(t.list()[0].since).toBe(NOW_S + 5);
+  });
+});
+
+// ── list() ──────────────────────────────────────────────────────────────────
+
+describe("SessionTracker — list()", () => {
+  it("returns one snapshot per session with sessionId + since", () => {
+    const t = new SessionTracker();
+    t.update("a", "working", NOW_S, "claude-code", "pa");
+    t.update("b", "done", NOW_S, "codex", "pb");
+    const list = t.list();
+    expect(list.length).toBe(2);
+    expect(list.map((s) => s.sessionId).sort()).toEqual(["a", "b"]);
+    for (const s of list) expect(typeof s.since).toBe("number");
+  });
+
+  it("excludes expired sessions", () => {
+    const t = new SessionTracker();
+    t.update("stale", "working", NOW_S - 400, "claude-code", null);
+    t.update("fresh", "working", NOW_S, "claude-code", null);
+    t.expireStale(NOW_MS, 300_000);
+    expect(t.list().map((s) => s.sessionId)).toEqual(["fresh"]);
+  });
+});

@@ -7,6 +7,7 @@
  */
 
 import type { AgentId, AgentState } from "../types/agent-event.js";
+import type { SessionSnapshot } from "../types/session-snapshot.js";
 
 export interface SessionEntry {
   state: AgentState;
@@ -14,6 +15,8 @@ export interface SessionEntry {
   ts: number;
   agent: AgentId | null;
   project: string | null;
+  /** Unix timestamp (seconds) when the current active streak started. */
+  since: number;
 }
 
 export interface AggregateResult {
@@ -26,11 +29,26 @@ export interface AggregateResult {
 }
 
 /** Priority order — lower index = higher priority. */
-const PRIORITY: AgentState[] = ["working", "waiting", "error", "done", "idle"];
+export const PRIORITY: AgentState[] = ["working", "waiting", "error", "done", "idle"];
 
-function statePriority(state: AgentState): number {
+export function statePriority(state: AgentState): number {
   const idx = PRIORITY.indexOf(state);
   return idx === -1 ? PRIORITY.length : idx;
+}
+
+/**
+ * Comparator for ordering sessions in a list view: higher-priority state first,
+ * then most-recent `ts` first when priorities tie. Works on any object carrying
+ * `state` + `ts` (e.g. SessionSnapshot) so list/tooltip surfaces share one rule.
+ */
+export function compareByPriorityThenTs(
+  a: { state: AgentState; ts: number },
+  b: { state: AgentState; ts: number },
+): number {
+  const pa = statePriority(a.state);
+  const pb = statePriority(b.state);
+  if (pa !== pb) return pa - pb;
+  return b.ts - a.ts;
 }
 
 /**
@@ -56,7 +74,35 @@ export class SessionTracker {
     agent: AgentId | null,
     project: string | null,
   ): void {
-    this.sessions.set(sessionId, { state, ts, agent, project });
+    const prev = this.sessions.get(sessionId);
+    // `since` marks when the current active streak started so the UI can show
+    // "how long this turn has run". Reset for a brand-new session, or when work
+    // resumes after a terminal state (done/error → working = a new turn). Keep
+    // it across working↔waiting (same turn, e.g. paused for a permission grant).
+    let since: number;
+    if (!prev) {
+      since = ts;
+    } else if ((prev.state === "done" || prev.state === "error") && state === "working") {
+      since = ts;
+    } else {
+      since = prev.since;
+    }
+    this.sessions.set(sessionId, { state, ts, agent, project, since });
+  }
+
+  /**
+   * Snapshot of all tracked sessions for list/broadcast consumers.
+   * Order is not guaranteed — callers sort (see compareByPriorityThenTs).
+   */
+  list(): SessionSnapshot[] {
+    return Array.from(this.sessions.entries()).map(([sessionId, e]) => ({
+      sessionId,
+      agent: e.agent,
+      project: e.project,
+      state: e.state,
+      since: e.since,
+      ts: e.ts,
+    }));
   }
 
   /**

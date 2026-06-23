@@ -79,6 +79,28 @@ pub fn select_pet(app: AppHandle, pet_id: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Valid status-label themes (mirrors LABEL_THEMES on the TS side).
+const VALID_THEMES: &[&str] = &["kitchen", "mood", "garden"];
+
+fn is_valid_theme(theme: &str) -> bool {
+    VALID_THEMES.contains(&theme)
+}
+
+/// Persist the selected status-label theme (kitchen | mood | garden).
+/// Rust validates and rejects unknown values (same pattern as select_pet).
+#[tauri::command]
+pub fn set_label_theme(app: AppHandle, theme: String) -> Result<(), String> {
+    if !is_valid_theme(&theme) {
+        return Err(format!("Unknown theme '{}'. Valid: {:?}", theme, VALID_THEMES));
+    }
+    let store = app
+        .store("copet-settings.json")
+        .map_err(|e| e.to_string())?;
+    store.set("label_theme", serde_json::json!(theme));
+    store.save().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Read persisted settings for the Settings panel.
 /// Returns the stored shortcut string and selected pet id (with defaults).
 /// Settings calls this on mount to restore UI state after restart.
@@ -86,6 +108,7 @@ pub fn select_pet(app: AppHandle, pet_id: String) -> Result<(), String> {
 pub fn get_settings(app: AppHandle) -> Result<serde_json::Value, String> {
     const DEFAULT_SHORTCUT: &str = "CmdOrCtrl+Shift+P";
     const DEFAULT_PET: &str = "blobby";
+    const DEFAULT_THEME: &str = "kitchen";
 
     let store = app
         .store("copet-settings.json")
@@ -101,9 +124,15 @@ pub fn get_settings(app: AppHandle) -> Result<serde_json::Value, String> {
         .and_then(|v| v.as_str().map(|s| s.to_owned()))
         .unwrap_or_else(|| DEFAULT_PET.to_owned());
 
+    let label_theme = store
+        .get("label_theme")
+        .and_then(|v| v.as_str().map(|s| s.to_owned()))
+        .unwrap_or_else(|| DEFAULT_THEME.to_owned());
+
     Ok(serde_json::json!({
         "shortcut": shortcut,
         "selected_pet": selected_pet,
+        "label_theme": label_theme,
     }))
 }
 
@@ -123,4 +152,22 @@ pub fn set_tray_state(app: AppHandle, state: String) -> Result<(), String> {
     };
     tray_set_state(&app, tray_state);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_valid_theme;
+
+    #[test]
+    fn valid_themes_accepted() {
+        assert!(is_valid_theme("kitchen"));
+        assert!(is_valid_theme("mood"));
+        assert!(is_valid_theme("garden"));
+    }
+
+    #[test]
+    fn invalid_themes_rejected() {
+        assert!(!is_valid_theme("bogus"));
+        assert!(!is_valid_theme(""));
+    }
 }

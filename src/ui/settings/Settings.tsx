@@ -19,6 +19,7 @@ import {
   isAutostartEnabled,
   setGlobalShortcut,
   selectPet,
+  setLabelTheme,
   getSettings,
   resetPetPosition,
   installHook,
@@ -26,6 +27,9 @@ import {
   hookStatus,
   type HookAgent,
 } from "../shared/tauri-commands.js";
+import { emit } from "@tauri-apps/api/event";
+import { LABEL_THEMES } from "../../agent-bridge/state-labels.js";
+import type { LabelTheme } from "../../types/session-snapshot.js";
 
 // ── Local storage key for reduced-motion preference ──────────────────────────
 const REDUCED_MOTION_KEY = "copet-reduced-motion";
@@ -84,6 +88,26 @@ const Settings: Component = () => {
       setSelectedPet(id);
     } catch {
       // No-op on unknown id (Rust validates).
+    }
+  }
+
+  // ── Status-label theme ───────────────────────────────────────────────────────
+  const [labelTheme, setLabelThemeSig] = createSignal<LabelTheme>("kitchen");
+
+  const THEME_NAMES: Record<LabelTheme, string> = {
+    kitchen: "🍳 Bếp núc",
+    mood: "😊 Cảm xúc",
+    garden: "🌱 Vườn tược",
+  };
+
+  async function handleSelectTheme(theme: LabelTheme): Promise<void> {
+    try {
+      await setLabelTheme(theme);
+      setLabelThemeSig(theme);
+      // Broadcast so HUD / popover / tooltip relabel immediately (no restart).
+      await emit("label-theme-changed", { theme });
+    } catch {
+      // No-op on unknown theme (Rust validates).
     }
   }
 
@@ -163,6 +187,7 @@ const Settings: Component = () => {
       const saved = await getSettings();
       setShortcut(saved.shortcut);
       setSelectedPet(saved.selected_pet);
+      setLabelThemeSig(saved.label_theme);
     } catch {
       // First launch or store unavailable — keep signal defaults.
     }
@@ -252,6 +277,25 @@ const Settings: Component = () => {
               <span class="pet-option-emoji">🔒</span>
               <span class="pet-option-name">Coming soon</span>
             </button>
+          </div>
+        </section>
+
+        {/* ── Status-label theme ───────────────────────────────────────────── */}
+        <section class="settings-section" aria-labelledby="sec-labels">
+          <h2 id="sec-labels" class="settings-section-title">Nhãn trạng thái</h2>
+          <p class="settings-hint">
+            Bộ nhãn cho trạng thái session (hiện ở HUD, popover, tooltip).
+          </p>
+          <div class="pet-select-row">
+            {LABEL_THEMES.map((t) => (
+              <button
+                class={`pet-option ${labelTheme() === t ? "pet-option--selected" : ""}`}
+                onClick={() => handleSelectTheme(t)}
+                aria-pressed={labelTheme() === t}
+              >
+                <span class="pet-option-name">{THEME_NAMES[t]}</span>
+              </button>
+            ))}
           </div>
         </section>
 
