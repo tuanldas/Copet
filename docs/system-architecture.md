@@ -99,6 +99,33 @@ Agent state flows: Agent CLI (hook or wrapper) → Unix socket → Tauri daemon 
         Canvas render output (visual)
 ```
 
+## AgentEvent Contract (Canonical Types)
+
+**Location:** `crates/copet-protocol/src/lib.rs` (Rust) + `src/types/agent-event.ts` (TS mirror).
+
+**Core fields** (always present):
+- `agent` — which CLI (claude-code, codex, gemini, wrapper)
+- `session_id` — unique per agent session
+- `state` — working, waiting, done, idle, error
+- `ts` — Unix timestamp
+- `tool`, `project` — optional tool name + cwd basename
+
+**Enrichment fields** (additive, optional; `#[serde(default)]` in Rust ensures old events don't break):
+- `tool_input` — condensed tool argument (e.g. "pnpm test" from Bash, edited filename from text-editor)
+- `cwd_full` — full working directory path
+- `message` — notification text (e.g. permission prompts when state=waiting)
+- `prompt` — most recent user prompt (Claude UserPromptSubmit)
+
+**Transcript enrichment** (Claude only, opt-in via `~/.copet/hook-config.json` `{"read_transcript": bool}`; null when disabled):
+- `model` — model id from last assistant turn (e.g. "claude-opus-4-8")
+- `summary` — task title (parsed from `ai-title` entries in transcript)
+- `last_message` — truncated last assistant text
+- `tokens_in`, `tokens_out` — input/output tokens from last turn
+
+Non-Claude agents populate only core + enrichment fields; transcript fields remain null.
+
+---
+
 ## Key Components
 
 ### 1. Tauri Core (src-tauri/)
@@ -126,10 +153,11 @@ Agent state flows: Agent CLI (hook or wrapper) → Unix socket → Tauri daemon 
 - Handles multi-session aggregation (session_id tracking)
 
 #### init_tray()
-- **tray.rs:** System tray icon + popover sessions window
-- Left-click tray → toggle sessions popover (TrayBottomCenter, Rust-side positioner)
+- **tray.rs:** System tray icon + runtime-built sessions control panel
+- Left-click tray → toggle sessions window (control panel showing companion card + agent counts + settings)
 - Menu (right-click): Show/Hide pet, open HUD/Settings/Shop, quit
 - Icon color changes per dominant agent state (working=blue, waiting=amber, done=green, error=red, idle=gray)
+- **Sessions window built at runtime** (not declared in tauri.conf.json) so it can apply `set_overlay_collection_behavior` + stay hidden at launch
 
 ### 2. Commands (src-tauri/src/commands/)
 
@@ -137,12 +165,13 @@ Agent state flows: Agent CLI (hook or wrapper) → Unix socket → Tauri daemon 
 |---------|--------|---------|
 | `set_pet_hit_rect(x, y, w, h)` | lib.rs | Frontend reports pet's interactive rect for click-through hit-test |
 | `open_hud`, `open_settings`, `open_shop` | window_commands.rs | Show/focus specific windows |
-| (sessions popover) | tray.rs | `toggle_sessions_popover` — tray left-click shows/hides the popover (no IPC command) |
 | `toggle_pet` | window_commands.rs | Show/hide pet window |
 | `reset_pet_position` | window_commands.rs | Revert to center-screen |
+| `quit_app` | window_commands.rs | Exit app (called from sessions control panel footer) |
 | `enable_autostart`, `is_autostart_enabled` | system_commands.rs | Manage boot launch |
 | `set_global_shortcut`, `get_settings`, `select_pet` | system_commands.rs | Settings panel |
-| `set_label_theme`, `get_settings` | system_commands.rs | Get/set label theme (kitchen/mood/garden) |
+| `set_label_theme`, `get_settings` | system_commands.rs | Get/set label theme (kitchen/mood/garden); `get_settings` now includes `transcript_optin` |
+| `set_transcript_optin` | system_commands.rs | Enable/disable reading Claude transcript for model/summary/tokens (writes to `~/.copet/hook-config.json`) |
 | `set_tray_state` | system_commands.rs | Update tray icon color per agent state |
 | `install_hook`, `uninstall_hook`, `hook_status` | install_commands.rs | Hook setup in Settings (copy/uninstall scripts) |
 
@@ -211,11 +240,12 @@ Agent state flows: Agent CLI (hook or wrapper) → Unix socket → Tauri daemon 
 - Change here = change in 2 places (Rust + TS mirror)
 
 #### copet-hook
-- **main.rs:** Entry point; reads hook JSON line from stdin
-- **map_claude.rs:** Parse Claude Code hook → AgentEvent
-- **map_codex.rs:** Parse Codex CLI hook → AgentEvent
-- **map_gemini.rs:** Parse Gemini CLI hook → AgentEvent
-- Writes AgentEvent (JSON) to socket at `/tmp/copet-{uid}.sock`
+- **main.rs:** Entry point; reads hook JSON line from stdin; enriches event with transcript data (Claude only, when opt-in enabled)
+- **map_claude.rs:** Parse Claude Code hook → AgentEvent; extract tool_input (condensed), full cwd, message, prompt
+- **map_codex.rs:** Parse Codex CLI hook → AgentEvent; populate only core fields (cwd_full, message where available)
+- **map_gemini.rs:** Parse Gemini CLI hook → AgentEvent; populate only core fields
+- **transcript.rs:** NEW—when opt-in enabled, read bounded 256KB tail of Claude `transcript_path` JSONL (on demand, per event); extract model, task summary (`ai-title`), last assistant text, tokens (input+cache, output); UTF-8-safe truncation; any error → None (no panic/block)
+- Writes enriched AgentEvent (JSON) to socket at `/tmp/copet-{uid}.sock`
 - tests/mapping_tests.rs: Unit tests for each mapping
 
 #### copet-run
@@ -270,8 +300,9 @@ Tray icon color updated
 | copet-pet.json | Pet stats, XP, evolution stage, cosmetics | Pet window | Write every 60s + on change |
 | copet-economy.json | Token balance, owned items, equipped cosmetic | Pet window | Write on purchase/stat restore |
 | window-state.json | HUD/Settings/Shop position/size (plugin managed) | Tauri plugin-store | Auto-persist per window |
+| ~/.copet/hook-config.json | Hook configuration: `{"read_transcript": bool}` | Tauri app (set_transcript_optin command) | Write on Settings toggle; read by copet-hook per event |
 
-**Single Writer:** Pet window is the exclusive writer. HUD/Settings/Shop read copet-pet.json, copet-economy.json every poll (1s) without writing.
+**Single Writer:** Pet window is the exclusive writer. HUD/Settings/Shop read copet-pet.json, copet-economy.json every poll (1s) without writing. Tauri app manages hook-config.json (writes via command); copet-hook reads it on each event to respect opt-in state.
 
 ## Click-Through & Hit-Testing
 
@@ -302,50 +333,21 @@ When multiple agents send events (e.g., Claude Code + Cursor simultaneously):
 
 Example: 3 agents running (Claude working, Codex waiting, Gemini done) → all 3 listed in sessions popover; pet glows blue (working dominant).
 
-## Windows (Tauri Config)
+## Windows (Tauri Config & Runtime)
 
-```json
-{
-  "windows": [
-    {
-      "label": "pet",
-      "title": "Copet Pet",
-      "transparent": true,
-      "alwaysOnTop": true,
-      "skipTaskbar": true,
-      "focusable": false,
-      "macOSPrivateApi": true
-    },
-    {
-      "label": "hud",
-      "title": "Stats HUD",
-      "visible": false,
-      "width": 320,
-      "height": 480
-    },
-    {
-      "label": "settings",
-      "title": "Copet Settings",
-      "visible": false
-    },
-    {
-      "label": "shop",
-      "title": "Copet Shop",
-      "visible": false
-    },
-    {
-      "label": "sessions",
-      "title": "Running Sessions",
-      "visible": false,
-      "width": 300,
-      "height": 360
-    }
-  ]
-}
-```
+**Config-declared windows** (tauri.conf.json):
+- **pet:** transparent overlay (never declared, built at init)
+- **stats:** HUD showing stats + session list
+- **settings:** agent toggles + hook install
+- **shop:** item grid
 
-**macOS Private API:** `acceptFirstMouse` + `ActivationPolicy::Accessory` hide dock icon.  
-**Tray Popover:** `sessions` window uses `tauri-plugin-positioner` Position::TrayBottomCenter for Rust-side positioning.
+**Runtime-built windows** (lib.rs, not in tauri.conf.json):
+- **sessions:** Control panel (CompanionCard + agent list + Show Pet toggle + Settings/Quit footer); built at init so it can apply `set_overlay_collection_behavior` + remain hidden until first tray click
+
+**macOS Private API:** `acceptFirstMouse` + `ActivationPolicy::Accessory` hide dock icon (applied to pet + sessions).  
+**Tray Popover Positioning (macOS):** Runtime-built sessions window uses native AppKit (`NSEvent::mouseLocation` + `NSScreen::visibleFrame`) instead of Tauri's unreliable `cursor_position()`/`set_position` on mixed-DPI displays (Tauri #7890, #7139). Window positioned in Cocoa points (the only coordinate space consistent across monitors).  
+**Fullscreen Support (macOS):** Sessions + pet windows apply `set_overlay_collection_behavior` with `FullScreenAuxiliary` so they float over other apps' native-fullscreen Spaces.  
+**Hidden at Launch:** Window-state plugin excludes `VISIBLE` flag (`StateFlags::all() & !VISIBLE`) so toggled windows stay hidden until explicitly opened.
 
 ## Sequence Diagram: Start → First Agent Event
 

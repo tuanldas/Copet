@@ -185,24 +185,28 @@ export function mapStateToReaction(state: AgentState): {glow: string, duration: 
 | shop-entry.tsx | Item card (icon, name, cost, Buy/Equip button); disable if can't afford |
 | shop.css | Grid, card styling |
 
-#### Sessions Popover (src/ui/sessions/)
+#### Sessions Control Panel (src/ui/sessions/)
 
 | File | Purpose |
 |------|---------|
-| sessions-entry.tsx | Entry point for sessions popover window; mounts SessionList |
-| sessions.css | Popover styling (card, overflow, session-row) |
+| sessions-entry.tsx | Entry point for sessions popover window; mounts CompanionCard + SessionList + footer |
+| **CompanionCard.tsx** | NEW—displays pet avatar, name, level, mood status (via pet-status.ts), XP bar, total tokens |
+| sessions.css | Control panel styling (card, grid, session-row, footer buttons) |
 
 #### Shared (src/ui/shared/)
 
 | File | Purpose |
 |------|---------|
+| **pet-status.ts** | NEW—derive mood label (Đói/Mệt/Cần tắm/Buồn/Ổn/No căng) from lowest stat + tone (good/warn/bad) |
+| **session-counts.ts** | NEW—countRunning(sessions) helper for popover header |
+| **session-format.ts** | NEW—formatTokens(n) (1.2k, 248k format) + shortModel(str) (strip "claude-" prefix) |
 | session-duration.ts | Format elapsed time from since (session streak start) |
 | label-theme-store.ts | SolidJS signal for current label theme; subscribe to label-theme-changed event |
 | session-list-model.ts | Compute session rows: sort by priority, apply theme labels, format for render |
 | use-sessions.ts | SolidJS hook: subscribe to sessions-snapshot event; expose sessions reactively |
-| SessionList.tsx | Shared component; render session list (3+ surfaces: HUD, popover, tooltip) |
-| session-list.css | Session row styling (state dot, theme label, duration, project, dimmed done/idle) |
-| tauri-commands.ts | Wrappers for all tauri::invoke commands (type-safe) |
+| SessionList.tsx | Shared component; render session list (3+ surfaces: HUD, popover, tooltip); show model badge + tokens + condensed tool |
+| session-list.css | Session row styling (state dot, theme label, duration, project, tool, model, tokens; dimmed done/idle) |
+| tauri-commands.ts | Wrappers for all tauri::invoke commands (type-safe); NEW `setTranscriptOptin`, `quitApp` |
 | design-tokens.css | Color palette, spacing, typography vars |
 
 ### Types (src/types/)
@@ -275,16 +279,18 @@ pub async fn spawn_daemon(app: AppHandle) -> Result<JoinHandle<()>>
 ```rust
 #[tauri::command]
 pub fn open_hud(window: WebviewWindow) -> Result<()>
-// sessions popover: toggled by tray left-click via tray::toggle_sessions_popover (not an IPC command)
 pub fn toggle_pet(window: WebviewWindow) -> Result<()>
 pub fn reset_pet_position(window: WebviewWindow) -> Result<()>
+pub fn quit_app(handle: AppHandle) -> Result<()>  // NEW—exit app (called from sessions control panel footer)
+// sessions control panel: toggled by tray left-click via tray::handle_tray_event (not an IPC command)
 ```
 
 **Key Fns (system_commands):**
 ```rust
 #[tauri::command]
 pub fn set_label_theme(handle: AppHandle, theme: String) -> Result<()>  // emit label-theme-changed event
-pub fn get_settings(handle: AppHandle) -> Result<Settings>  // includes label_theme field
+pub fn get_settings(handle: AppHandle) -> Result<Settings>  // includes label_theme + NEW transcript_optin field
+pub fn set_transcript_optin(handle: AppHandle, enabled: bool) -> Result<()>  // NEW—write to ~/.copet/hook-config.json; read by copet-hook
 pub fn set_tray_state(handle: AppHandle, state: String) -> Result<()>  // update tray icon color
 pub fn set_global_shortcut(handle: AppHandle, hotkey: String) -> Result<()>
 ```
@@ -335,19 +341,32 @@ pub struct AgentEvent {
     pub state: State,
     pub tool: Option<String>,
     pub project: Option<String>,
+    // NEW: enrichment fields (additive, #[serde(default)])
+    pub tool_input: Option<String>,
+    pub cwd_full: Option<String>,
+    pub message: Option<String>,
+    pub prompt: Option<String>,
+    // NEW: transcript enrichment (Claude only, opt-in)
+    pub model: Option<String>,
+    pub summary: Option<String>,
+    pub last_message: Option<String>,
+    pub tokens_in: Option<u64>,
+    pub tokens_out: Option<u64>,
     pub ts: u64,
 }
 pub fn copet_socket_path() -> String  // /tmp/copet-{uid}.sock or pipe on Win
+pub fn copet_config_path() -> String  // ~/.copet/hook-config.json (opt-in read_transcript flag)
 ```
 
-### copet-hook (agent hook mapper)
+### copet-hook (agent hook mapper + transcript enrichment)
 
 | File | Purpose |
 |------|---------|
-| **main.rs** | Read hook JSON from stdin; route to mapper; write AgentEvent to socket |
-| **map_claude.rs** | Parse Claude Code hook JSON → AgentEvent |
-| **map_codex.rs** | Parse Codex CLI hook JSON → AgentEvent |
-| **map_gemini.rs** | Parse Gemini CLI hook JSON → AgentEvent |
+| **main.rs** | Read hook JSON from stdin; route to mapper; enrich Claude events with transcript data (if opt-in enabled); write AgentEvent to socket |
+| **map_claude.rs** | Parse Claude Code hook JSON → AgentEvent; extract enrichment fields (tool_input, cwd_full, message, prompt) |
+| **map_codex.rs** | Parse Codex CLI hook JSON → AgentEvent; populate core fields (cwd_full, message where available) |
+| **map_gemini.rs** | Parse Gemini CLI hook JSON → AgentEvent; populate core fields |
+| **transcript.rs** | NEW—read bounded 256KB tail of Claude transcript JSONL; extract model, task summary (ai-title), last assistant text, tokens; UTF-8-safe truncation; graceful error handling (None on any error, never panics) |
 
 **Tests:**
 - mapping_tests.rs → test each mapper with sample JSON
@@ -358,6 +377,7 @@ pub fn map_claude_hook(json: &str) -> Result<AgentEvent> {
     // Parse hook JSON
     // Extract state (working/waiting/done/error)
     // Extract session_id, tool (optional), project (optional)
+    // NEW: extract tool_input, cwd_full, message, prompt
     // Return AgentEvent
 }
 ```
@@ -366,7 +386,11 @@ pub fn map_claude_hook(json: &str) -> Result<AgentEvent> {
 ```rust
 fn main() {
     let hook_json = read_stdin()?;
-    let event = route_mapper(&hook_json)?;
+    let mut event = route_mapper(&hook_json)?;
+    // NEW: if Claude + transcript opt-in, enrich with transcript data
+    if event.agent == Agent::ClaudeCode && read_transcript_optin()? {
+        event = enrich_with_transcript(event)?;
+    }
     let socket = socket_path()?;
     write_socket(&socket, &event)?;
 }
@@ -493,10 +517,10 @@ cargo clippy --workspace
 
 | Metric | Count |
 |--------|-------|
-| Total files | 135+ (post-sessions feature) |
-| TypeScript/TSX | ~6200 LOC |
-| Rust (core + sidecars) | ~3000 LOC |
-| Test cases | ~261 across vitest + Rust |
+| Total files | 142+ (post-session-enrichment feature) |
+| TypeScript/TSX | ~6600 LOC |
+| Rust (core + sidecars) | ~3300 LOC |
+| Test cases | ~261+ across vitest + Rust |
 | Build time (cold) | ~90s |
 | Build time (incremental) | ~10s |
 | DMG size (uncompressed) | ~10–12MB |

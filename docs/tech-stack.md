@@ -13,15 +13,16 @@
 ## Stack
 
 ### Desktop shell
-- **Tauri v2** — window pet trong suốt, always-on-top; window riêng cho Stats HUD / Settings / Shop
-- macOS: `macOSPrivateApi: true`, `ActivationPolicy::Accessory` (ẩn khỏi Dock)
+- **Tauri v2** — window pet trong suốt, always-on-top; windows riêng cho Stats HUD / Settings / Shop / Sessions control panel (runtime-built)
+- macOS: `macOSPrivateApi: true`, `ActivationPolicy::Accessory` (ẩn khỏi Dock); NEW AppKit deps (objc2, objc2-app-kit, objc2-foundation) for native fullscreen overlay + multi-monitor popover positioning
 - Plugins: `tauri-plugin-positioner`, `window-state`, `global-shortcut`, `autostart`, `notification`, `store`
 
 ### Backend (Rust)
 - Tauri core: tokio async runtime
 - IPC daemon: crate **`interprocess`** — Unix domain socket (mac/linux) / named pipe (win), path `/tmp/copet-{uid}.sock`
-- **`copet-hook`** — sidecar binary Rust (~500KB): đọc hook JSON từ stdin → map state → ghi socket
+- **`copet-hook`** — sidecar binary Rust (~500KB): đọc hook JSON từ stdin → map state → enrich (tool_input, cwd, message, prompt) → opt-in transcript parse (Claude only) → ghi socket
 - **`copet run -- <cmd>`** — universal wrapper (process lifecycle → working/done)
+- **`objc2`**, **`objc2-app-kit`**, **`objc2-foundation`** — macOS only; native AppKit for fullscreen overlay behavior + multi-monitor popover positioning (NSScreen, NSEvent, NSWindow)
 
 ### Frontend (web, trong webview)
 - **Pet render:** Vanilla TS + **Canvas 2D + spritesheet** (pause khi `visibilitychange`)
@@ -52,9 +53,10 @@
 - **Full XState** (~40KB) — `@xstate/store` (<1KB) là đủ.
 
 ## Rủi ro chính (xem research reports)
-1. Tauri transparent-window click-through (issue #13070) — MVP: pet bắt click trên pixel của nó, vùng trong suốt pass-through (macOS native). **PoC sớm.**
-2. Cursor không có CLI hooks — chỉ wrapper (working/done).
-3. macOS fullscreen che overlay — override NSWindowLevel.
+1. Tauri transparent-window click-through (issue #13070) — MVP: pet bắt click trên pixel của nó, vùng trong suốt pass-through (macOS native). **PoC sớm.** ✅ Shipped macOS; Win/Linux best-effort cursor-poll.
+2. Cursor không có CLI hooks — chỉ wrapper (working/done). Awaiting Cursor API release.
+3. macOS fullscreen che overlay — ✅ solved AppKit NSScreenSaverWindowLevel + FullScreenAuxiliary (shipped 2026-06-23).
+4. macOS multi-monitor popover positioning — ✅ AppKit NSEvent::mouseLocation + NSScreen::visibleFrame (more reliable than Tauri #7890, #7139). Shipped; Win/Linux pending P-0 verification.
 
 ## References
 - `plans/reports/research-260622-1501-tauri-desktop-pet-overlay-report.md`

@@ -28,28 +28,84 @@
 
 ## Post-MVP Releases
 
-### Feature Release: Running Sessions List (Multi-Surface) — 2026-06-23 ✅ **SHIPPED**
+### Feature Release: Session-Info Enrichment (Phase 1 & 2) — 2026-06-23 ✅ **SHIPPED**
 
-**Milestone:** Pet window broadcasts per-session snapshot via Tauri event `sessions-snapshot`; HUD + new tray popover + tooltip render multi-session list.
+**Phase 1: Hook-Payload Enrichment (mvp)** — Copet-hook extracts condensed tool_input, full cwd_full, notification message, user prompt from hook JSON.
+
+**Phase 2: Transcript Enrichment (opt-in)** — NEW copet-hook/transcript.rs reads Claude transcript JSONL (bounded 256KB tail); extracts model, task summary, last_message, tokens_in/out; graceful error handling.
+
+**Key Changes:**
+- AgentEvent struct grows 9 optional fields (additive, `#[serde(default)]`): tool_input, cwd_full, message, prompt (always on Claude), + model, summary, last_message, tokens_in, tokens_out (Claude only, opt-in)
+- NEW `copet_config_path()` → `~/.copet/hook-config.json`; Settings has privacy-warned toggle "Model & tóm tắt task"
+- NEW `set_transcript_optin(enabled: bool)` command; `get_settings` returns `transcript_optin` field
+- copet-hook/transcript.rs: parse transcript on demand per event; UTF-8-safe truncation; any error → None (never blocks/panics)
+- SessionList.tsx + tooltip-render.ts show model badge, tokens, condensed tool; cwd/prompt/last_message go to hover title
+- Helper functions: `pet-status.ts` (mood from stats), `session-counts.ts` (countRunning), `session-format.ts` (formatTokens, shortModel)
+
+**Sessions Control Panel (Multi-Surface)** — sessions window redesigned:
+- NEW CompanionCard.tsx: pet avatar/name/level/mood/XP bar/total tokens
+- Header: agent counts + Show Pet toggle
+- Footer: Settings/Quit buttons
+- Size: 320x520
+
+**Popover Positioning (macOS Runtime-Native)** — sessions window built at runtime (not in tauri.conf.json) so it can apply fullscreen overlay behavior + AppKit positioning (NSEvent::mouseLocation + NSScreen::visibleFrame); replaces unreliable Tauri `cursor_position` / `set_position`.
+
+**New Deps:** objc2, objc2-foundation (AppKit for native window positioning + fullscreen overlay).
+
+**Tests:** 261+ vitest + Rust tests passing; tsc clean; cargo check/clippy clean.
+
+**Status:** Complete; shipped.
+
+---
+
+### Feature Release: Running Sessions List (Multi-Surface) — 2026-06-23 ✅ **SHIPPED** (earlier phase)
+
+**Milestone:** Pet window broadcasts per-session snapshot via Tauri event `sessions-snapshot`; HUD + tray popover + tooltip render multi-session list.
 
 **Key Changes:**
 - New shared types: `SessionSnapshot` (sessionId, agent, project, state, since, ts), `LabelTheme` enum (kitchen/mood/garden)
 - `SessionTracker` gains `since` per session, `list()` method, exported `PRIORITY` + comparator
 - New modules: `state-labels.ts` (3 selectable label themes), `session-duration.ts`, `label-theme-store.ts`, `session-list-model.ts`, `use-sessions.ts` hook, `SessionList.tsx` component
-- New tray popover window (`sessions` label, capability, sessions.html vite entry)
-- **Tray behavior changed:** Left-click now opens sessions popover (pet visibility moved to tray menu + global shortcut)
-- `Cargo.toml`: `tauri-plugin-positioner` now has `features = ["tray-icon"]` for Rust-side tray positioning (Position::TrayBottomCenter)
-- New Rust command `set_label_theme`; `get_settings` now returns `label_theme` field
+- New tray control panel window (`sessions` label, runtime-built)
+- **Tray behavior changed:** Left-click now opens sessions control panel (pet visibility via menu + global shortcut)
+- `Cargo.toml`: `tauri-plugin-positioner` has `features = ["tray-icon"]`; NEW objc2 deps for AppKit
+- New Rust command `set_label_theme`; `get_settings` returns `label_theme` field
 - Removed `AgentStatusRow.tsx` (superseded by SessionList)
-- Status labels are theme-flavoured (Tamagotchi style, user-selectable); done/idle rows render dimmed; sessions expire after 5 min inactivity
+- Status labels are theme-flavoured; done/idle rows render dimmed; sessions expire after 5 min inactivity
 
-**Tests:** 261 vitest + Rust tests passing; tsc clean; cargo check/clippy clean.
-
-**Status:** Complete; ready for users.
+**Status:** Complete; shipped.
 
 ---
 
 ## Post-MVP Roadmap (Prioritized)
+
+### In-Flight: Sessions Control-Panel Refinements (deferred)
+
+**Ticket:** plans/260623-1454-tray-popover-control-panel/
+
+Features for later phases:
+- Daily token/earnings display in popover header
+- Custom pet name (currently hardcoded "Copet")
+- Pet size slider (currently fixed 96×96)
+- Floating menu bar (Claude Code plugin style)
+- Notification bubble for new sessions
+
+All deferred pending user demand + bandwidth.
+
+---
+
+### P-0: Multi-Monitor Fullscreen Popover on Win/Linux (Optional)
+
+**Estimated:** 1 dev week  
+**Dependency:** P-1 (no critical bugs)
+
+The macOS AppKit positioning (`NSEvent::mouseLocation` + `NSScreen::visibleFrame`) works natively. Windows/Linux need verification:
+- Win 10/11: test taskbar position + multi-monitor DPI edge cases
+- Linux: test X11 + Wayland; may need alternative positioning library (libappindicator3 for Wayland?)
+
+If issues found, fallback: use Tauri `cursor_position` with bounds clamping (safer but less native-feeling).
+
+---
 
 ### P-1: Bug Fixes & Critical Issues (if any)
 
@@ -284,14 +340,16 @@ Every 3 months:
 ## Next Immediate Actions (Week 1 Post-Release)
 
 1. [ ] Monitor GitHub issues + community feedback
-2. [ ] Verify e2e on Windows 10/11 + Linux (best-effort)
-3. [ ] Prepare P-1 bug fix sprint if issues found
-4. [ ] Begin P-2a planning (Apple code-signing setup)
-5. [ ] Reach out to pixel artists for community pet-pack commissions
-6. [ ] Set up telemetry (optional: hook install success rate)
+2. [ ] Verify e2e on Windows 10/11 + Linux (popover positioning, click-through)
+3. [ ] Test transcript opt-in toggle with real Claude Code agent (verify privacy + correctness)
+4. [ ] Prepare P-0 verification report (multi-monitor fullscreen)
+5. [ ] Begin P-1 bug fix sprint if issues found
+6. [ ] Begin P-2a planning (Apple code-signing setup)
+7. [ ] Reach out to pixel artists for community pet-pack commissions
+8. [ ] Set up telemetry (optional: hook install success rate, transcript opt-in adoption)
 
 ---
 
 **Last Updated:** 2026-06-23  
-**Status:** MVP + running-sessions feature complete; ready for P-1 bug fixes or P-2 distribution  
-**Next Review:** 2026-07-23 (1 month post-sessions-release)
+**Status:** MVP + running-sessions + session-info enrichment complete; ready for P-0 verification or P-1 bug fixes  
+**Next Review:** 2026-07-23 (1 month post-enrichment-release)
