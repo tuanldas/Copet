@@ -370,8 +370,63 @@ fn start_click_through_poll(app: AppHandle) {
     });
 }
 
-/// Is the OS cursor within the pet's interactive rect?
+/// Is the OS cursor within the pet's interactive rect? Splits per-OS like
+/// `tray::position_popover_at_cursor`: macOS must hit-test in Cocoa points,
+/// because Tauri's `cursor_position()`/`outer_position()` disagree across
+/// mixed-DPI displays (tauri#7890). That mismatch made this return false over
+/// the pet on a secondary monitor, so click-through never released and the pet
+/// was uninteractive — and thus undraggable — there.
 fn cursor_over_pet(app: &AppHandle, pet: &WebviewWindow) -> bool {
+    #[cfg(target_os = "macos")]
+    let over = cursor_over_pet_macos(app, pet);
+    #[cfg(not(target_os = "macos"))]
+    let over = cursor_over_pet_fallback(app, pet);
+    over
+}
+
+/// macOS: hit-test in Cocoa global points. `NSEvent::mouseLocation` and
+/// `NSWindow.frame` are BOTH bottom-left-origin global points — the one space
+/// macOS keeps consistent across displays with different scale factors, unlike
+/// Tauri's physical-px cursor/window coords (tauri#7890). Mirrors
+/// `tray::position_popover_macos`. Runs on the poll's main-thread hop, so the
+/// AppKit calls are safe.
+#[cfg(target_os = "macos")]
+fn cursor_over_pet_macos(app: &AppHandle, pet: &WebviewWindow) -> bool {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSEvent, NSWindow};
+
+    // The poll dispatches via run_on_main_thread; bail if that ever changes.
+    if MainThreadMarker::new().is_none() {
+        return false;
+    }
+    let Ok(ptr) = pet.ns_window() else {
+        return false;
+    };
+    if ptr.is_null() {
+        return false;
+    }
+    // SAFETY: Tauri returns a live NSWindow pointer for the "pet" window, and
+    // this runs on the main thread (run_on_main_thread in the poll).
+    let ns_window: &NSWindow = unsafe { &*(ptr.cast::<NSWindow>()) };
+
+    let mouse = NSEvent::mouseLocation();
+    // decorations(false) → frame == content rect, so no title-bar inset.
+    let frame = ns_window.frame();
+    let r = *app.state::<Arc<PetHit>>().rect.lock().unwrap();
+
+    // The hit-rect is logical px from the content's TOP-left (y-down). Cocoa
+    // points are bottom-left-origin (y-up), so the rect's top edge sits `r.y`
+    // below the window top. Points ARE the logical unit → no scale factor.
+    let window_top = frame.origin.y + frame.size.height;
+    let left = frame.origin.x + r.x;
+    let top = window_top - r.y;
+    mouse.x >= left && mouse.x <= left + r.w && mouse.y <= top && mouse.y >= top - r.h
+}
+
+/// Non-macOS: the cursor and window position share one physical-px space, so
+/// the original direct math is correct.
+#[cfg(not(target_os = "macos"))]
+fn cursor_over_pet_fallback(app: &AppHandle, pet: &WebviewWindow) -> bool {
     let (Ok(cursor), Ok(pos)) = (app.cursor_position(), pet.outer_position()) else {
         return false;
     };
