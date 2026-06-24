@@ -9,6 +9,7 @@
 mod map_claude;
 mod map_codex;
 mod map_gemini;
+mod question_detect;
 mod transcript;
 
 use copet_protocol::{copet_socket_path, AgentEvent};
@@ -44,6 +45,11 @@ fn main() {
     if agent_name == "claude" {
         transcript::maybe_enrich(&mut event, &stdin_buf);
     }
+
+    // Reclassify a finished turn that actually ended by ASKING the user something
+    // → Waiting ("needs input"). Reads event.last_message (Codex inline / Claude
+    // transcript), so it's a no-op when narration is absent.
+    question_detect::apply(&mut event);
 
     // Serialize and send — ignore all socket errors (daemon may not be running).
     let _ = send_event(&event);

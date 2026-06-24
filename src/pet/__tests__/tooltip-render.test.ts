@@ -77,12 +77,12 @@ describe("renderTooltipHtml", () => {
     expect(waiting).toContain("cpt-dot--waiting");
   });
 
-  it("shows the active tool on its own command line only when working", () => {
+  it("shows a themed activity line (raw tool name replaced) only when working", () => {
     const working = renderTooltipHtml({ sessions: [snap("working", { project: "p", tool: "Bash" })], theme: "kitchen" }, NOW);
-    expect(working).toContain("Bash");
     expect(working).toContain("cpt-cmd");
+    expect(working).not.toContain(">Bash<"); // raw tool name → friendly themed phrase
     const done = renderTooltipHtml({ sessions: [snap("done", { project: "p", tool: "Bash" })], theme: "kitchen" }, NOW);
-    expect(done).not.toContain("Bash");
+    expect(done).not.toContain("cpt-cmd");
   });
 
   it("shows the enriched tool input next to the tool when working", () => {
@@ -106,6 +106,26 @@ describe("renderTooltipHtml", () => {
       NOW,
     );
     expect(working).not.toContain("needs permission for Bash");
+  });
+
+  it("falls back to the assistant question (lastMessage) in the ask line when waiting without a notification message", () => {
+    const html = renderTooltipHtml(
+      { sessions: [snap("waiting", { project: "p", message: null, lastMessage: "Which <option> should I pick?" })], theme: "kitchen" },
+      NOW,
+    );
+    expect(html).toContain("cpt-cmd--ask");
+    expect(html).toContain("Which &lt;option&gt; should I pick?"); // escaped
+    expect(html).not.toContain("<option>");
+  });
+
+  it("prefers the notification message over lastMessage in the waiting ask line", () => {
+    const html = renderTooltipHtml(
+      { sessions: [snap("waiting", { project: "p", message: "needs permission", lastMessage: "Which option?" })], theme: "kitchen" },
+      NOW,
+    );
+    // The ask line itself shows the message (lastMessage still appears in the
+    // hover title, so assert on the ask-line content, not the whole document).
+    expect(html).toContain('cpt-cmd--ask">needs permission</div>');
   });
 
   it("drops the last-activity 'X trước' line", () => {

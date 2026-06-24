@@ -38,7 +38,7 @@
 | Agent | Cơ chế | working | waiting | done |
 |---|---|---|---|---|
 | Claude Code | hooks (settings.json) | PreToolUse / UserPromptSubmit | Notification[idle/permission] | Stop / SessionEnd |
-| Codex CLI | hooks + notify | preToolUse | approval-requested | agent-turn-complete |
+| Codex CLI | hooks (hooks.json) | PreToolUse / UserPromptSubmit | PermissionRequest | Stop / SubagentStop |
 | Gemini CLI | hooks v1 | BeforeTool / BeforeAgent | AfterModel | AfterAgent |
 | Cursor / khác | universal wrapper | process running | — | exit code |
 
