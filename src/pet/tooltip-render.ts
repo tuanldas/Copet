@@ -95,9 +95,9 @@ export function renderTooltipHtml(data: TooltipData, nowSeconds: number): string
           `<span class="cpt-dot cpt-dot--${s.state}"></span>` +
           badgePart +
           `<span class="cpt-name" title="${hoverTitle(s)}">${name}</span>` +
+          `<span class="cpt-state cpt-state--${s.state}">${escHtml(label.emoji)} ${escHtml(label.text)}</span>` +
           `<span class="cpt-timer">${dur}</span>` +
         `</div>` +
-        `<div class="cpt-state cpt-state--${s.state}">${escHtml(label.emoji)} ${escHtml(label.text)}</div>` +
         commandLine(s) +
       `</div>`
     );

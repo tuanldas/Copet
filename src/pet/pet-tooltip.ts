@@ -49,7 +49,7 @@ const STYLE_ID = "cpt-tooltip-style";
  * ignored. Contains ONLY `#pet-tooltip` caret + `.cpt-*` rules — never `html`,
  * `body`, or `*` (those would leak into the transparent overlay window).
  */
-const PANEL_CSS = `@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=Nunito:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+const PANEL_CSS = `@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 #pet-tooltip::after{content:"";position:absolute;left:50%;bottom:-8px;transform:translateX(-50%) rotate(45deg);width:16px;height:16px;background:#ffffff;border-right:1px solid rgba(15,23,42,0.08);border-bottom:1px solid rgba(15,23,42,0.08);}
 .cpt-empty{padding:10px 14px;color:#64748b;}
 .cpt-row{padding:12px 14px;}
@@ -63,9 +63,9 @@ const PANEL_CSS = `@import url('https://fonts.googleapis.com/css2?family=Pixelif
 .cpt-dot--error{background:#ef4444;}
 .cpt-badge{flex:0 0 auto;display:inline-flex;width:16px;height:16px;}
 .cpt-badge svg{width:16px;height:16px;display:block;}
-.cpt-name{font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:500;font-size:13.5px;color:#1e1e2e;flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.cpt-timer{font-family:'Pixelify Sans',ui-monospace,monospace;font-size:13px;color:#64748b;flex:0 0 auto;font-variant-numeric:tabular-nums;}
-.cpt-state{margin-top:7px;font-size:12.5px;font-weight:700;}
+.cpt-name{font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:500;font-size:13.5px;color:#1e1e2e;flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cpt-state{flex:0 0 auto;font-size:12px;font-weight:700;white-space:nowrap;}
+.cpt-timer{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:#64748b;flex:0 0 auto;margin-left:auto;font-variant-numeric:tabular-nums;}
 .cpt-state--working{color:#3b82f6;}
 .cpt-state--waiting{color:#f59e0b;}
 .cpt-state--done{color:#22c55e;}
@@ -127,8 +127,10 @@ export function mountTooltip(
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
+    // Pet nghỉ ở GIỮA cửa sổ (render-loop) → căn panel + caret vào giữa cửa sổ để
+    // trỏ đúng đỉnh pet dù panel rộng 400px. Clamp trong viewport.
+    const left = Math.max(0, Math.min((vw - w) / 2, vw - w));
     // Neo phía trên pet; clamp top ≥ 0 (cửa sổ thấp → ngồi sát mép trên thay vì lật xuống).
-    const left = Math.min(Math.max(0, rect.left + pos.x), Math.max(0, vw - w));
     const top = Math.min(Math.max(0, rect.top + pos.y - h - GAP), Math.max(0, vh - h));
 
     el.style.left = `${left}px`;
@@ -189,7 +191,9 @@ function applyBaseStyles(el: HTMLDivElement): void {
     color: "#1e1e2e",
     borderRadius: "12px",
     border: "1px solid rgba(15,23,42,0.08)",
-    boxShadow: "0 8px 30px rgba(0,0,0,0.45)",
+    // Softer + smaller blur so it fully fades inside the window margin (≈40px each
+    // side); a 30px/0.45 shadow overran the edge and got clipped into a hard line.
+    boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
     fontFamily: "'Nunito', system-ui, sans-serif",
     fontSize: "12px",
   });
