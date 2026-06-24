@@ -76,6 +76,8 @@ pub fn parse(json: &str) -> Option<AgentEvent> {
         last_message: None,
         tokens_in: None,
         tokens_out: None,
+        // Codex has no session-end hook; never flagged as ended.
+        ended: false,
         ts: unix_now(),
     })
 }

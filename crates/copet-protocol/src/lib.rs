@@ -81,6 +81,15 @@ pub struct AgentEvent {
     #[serde(default)]
     pub tokens_out: Option<u64>,
 
+    /// Session-termination signal. Set by Claude's `SessionEnd` hook (any
+    /// reason: `/clear`, logout, exit…). When true, the frontend REMOVES this
+    /// session from the tracker instead of rendering its `state`, so a `/clear`
+    /// no longer leaves a stale "done" session lingering until the expiry
+    /// window. Agents/events without an end signal omit it → `#[serde(default)]`
+    /// deserializes to false. Always serialized (plain bool, not skipped).
+    #[serde(default)]
+    pub ended: bool,
+
     /// Unix timestamp in seconds.
     pub ts: u64,
 }
@@ -149,6 +158,7 @@ mod tests {
             last_message: None,
             tokens_in: Some(248_000),
             tokens_out: Some(1_219),
+            ended: false,
             ts: 1_750_000_000,
         }
     }
@@ -187,6 +197,19 @@ mod tests {
         assert!(ev.last_message.is_none());
         assert!(ev.tokens_in.is_none());
         assert!(ev.tokens_out.is_none());
+        // `ended` defaults to false for legacy events that omit it.
+        assert!(!ev.ended);
+    }
+
+    #[test]
+    fn ended_flag_round_trips_true() {
+        // A SessionEnd event carries ended=true; it must survive serialization
+        // so the frontend can evict the session.
+        let mut ev = sample_event();
+        ev.ended = true;
+        let back: AgentEvent =
+            serde_json::from_str(&serde_json::to_string(&ev).unwrap()).unwrap();
+        assert!(back.ended);
     }
 
     #[test]

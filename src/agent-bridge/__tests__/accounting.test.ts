@@ -40,6 +40,7 @@ function makeEvent(overrides: Partial<AgentEvent> = {}): AgentEvent {
     last_message: null,
     tokens_in: null,
     tokens_out: null,
+    ended: false,
     ts: Math.floor(Date.now() / 1000),
     ...overrides,
   };

@@ -55,6 +55,9 @@ fn main() -> ExitCode {
         last_message: None,
         tokens_in: None,
         tokens_out: None,
+        // The wrapper has no "session end" concept; its done/error events
+        // expire via the normal timeout, so they are never flagged as ended.
+        ended: false,
         ts: unix_now(),
     });
 
@@ -87,6 +90,8 @@ fn main() -> ExitCode {
                 last_message: None,
                 tokens_in: None,
                 tokens_out: None,
+                // The wrapper has no "session end" concept; never flagged ended.
+                ended: false,
                 ts: unix_now(),
             });
             return ExitCode::FAILURE;
@@ -117,6 +122,9 @@ fn main() -> ExitCode {
         last_message: None,
         tokens_in: None,
         tokens_out: None,
+        // The wrapper has no "session end" concept; its done/error events
+        // expire via the normal timeout, so they are never flagged as ended.
+        ended: false,
         ts: unix_now(),
     });
 

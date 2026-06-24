@@ -47,6 +47,12 @@ pub fn parse(json: &str) -> Option<AgentEvent> {
     let event_name = p.hook_event_name.as_deref().unwrap_or("");
     let session_id = p.session_id.clone().unwrap_or_default();
 
+    // SessionEnd fires when the conversation terminates (any reason: `/clear`,
+    // logout, exit). It still maps to Done for legacy consumers, but `ended`
+    // tells the frontend to REMOVE the session — otherwise a cleared session
+    // lingers as a stale "done" entry, overlapping the freshly-started one
+    // (a `/clear` starts a brand-new session_id).
+    let ended = event_name == "SessionEnd";
     let state = match event_name {
         "PreToolUse" | "UserPromptSubmit" | "SubagentStart" => State::Working,
         "Notification" => {
@@ -90,6 +96,7 @@ pub fn parse(json: &str) -> Option<AgentEvent> {
         last_message: None,
         tokens_in: None,
         tokens_out: None,
+        ended,
         ts: unix_now(),
     })
 }
@@ -222,6 +229,18 @@ mod tests {
         let json = r#"{"hook_event_name":"Stop","session_id":"s2","cwd":"/proj"}"#;
         let ev = parse(json).unwrap();
         assert_eq!(ev.state, State::Done);
+        // Stop ends a turn but NOT the session — must not be flagged as ended.
+        assert!(!ev.ended);
+    }
+
+    #[test]
+    fn session_end_sets_ended_flag() {
+        // SessionEnd (e.g. after /clear) maps to Done but carries ended=true so
+        // the frontend removes the session instead of leaving a stale entry.
+        let json = r#"{"hook_event_name":"SessionEnd","session_id":"s2","cwd":"/proj"}"#;
+        let ev = parse(json).unwrap();
+        assert_eq!(ev.state, State::Done);
+        assert!(ev.ended);
     }
 
     #[test]
