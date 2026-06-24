@@ -35,6 +35,13 @@ Mục tiêu: popup/HUD hiển thị **lời tường thuật assistant** (prose 
 - **Codex** có đường sạch nhất: Stop/SubagentStop hook đẩy `last_assistant_message` inline → đổ vào `last_message` (cùng kênh hook Copet đã có, không đọc file). **Leapfrog agentpet** (repo mẫu KHÔNG làm narration cho Codex).
 - **Question-detection**: chính `last_assistant_message`/`last_message` cho phép phát hiện agent kết thúc bằng câu hỏi → đổi `done`→`waiting` ("cần input"), đúng pain point Copet (hiện map `Stop→Done` cứng).
 
+## Outcome (2026-06-24)
+
+**Shipped 4/5 (Phases 1, 2, 3, 5)** on branch `feat/agent-narration-display`, all gates green (`cargo test --workspace`, `clippy -D warnings`, `tsc`, `pnpm test` 317/317), Phase 1 code-reviewed. Commits: `feat(codex)…`, `feat(hook): reclassify…`, `feat(hook): prefer…`, `feat(pet): themed phrases`.
+- Notable: Phase 1 spike found Copet's Codex hook integration was **broken** (wrong schema + wrong config file) — fixed as part of the rewrite (`~/.codex/hooks.json` ClaudeNested + `[features] hooks=true`).
+- **Phase 4 (Gemini wrapper) DEFERRED** by decision — plan-flagged YAGNI: low value (wrapper-only, no interactive narration) + Gemini CLI possible mid-2026 deprecation. Re-open as its own plan if needed.
+- **Still open (not a blocker):** runtime verification that Codex actually populates `last_assistant_message` on a live `Stop` (degrades safely to null if not). Tracked in Open Question #1/#3.
+
 ## Phases
 
 | Phase | Name | Status |

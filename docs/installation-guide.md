@@ -83,7 +83,7 @@ Config files patched:
 | Agent | Config path |
 |---|---|
 | Claude Code | `~/.claude/settings.json` |
-| Codex | `~/.config/codex/config.yaml` or `~/.codex/config.toml` |
+| Codex | `~/.codex/hooks.json` (+ `[features] hooks=true` in `~/.codex/config.toml`) |
 | Gemini CLI | `~/.gemini/settings.yaml` |
 
 ---

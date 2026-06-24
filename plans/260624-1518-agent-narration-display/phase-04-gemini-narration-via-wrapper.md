@@ -7,6 +7,8 @@ effort: "L (đổi I/O copet-run: capture+tee; rủi ro cao)"
 
 # Phase 4: Gemini narration via wrapper
 
+> 🟥 **DEFERRED (2026-06-24, by decision).** Not implemented this round — plan-flagged YAGNI: low value (wrapper-only, no interactive narration) + likely Gemini CLI mid-2026 deprecation. The other 4 phases shipped. Re-open as its own plan (and first verify Gemini CLI is still the right target) before building this. Spec below is preserved for that future work.
+
 # ⚠️ Phase rủi ro cao nhất / giá trị thấp nhất — làm cuối, cân nhắc deprecation Gemini CLI trước.
 
 ## Overview

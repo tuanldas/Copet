@@ -108,26 +108,45 @@ tray popover and pet tooltip:
 
 ## OpenAI Codex
 
-Codex supports a `notify` hooks configuration. Add to your Codex config
-(path varies by version — typically `~/.codex/config.toml` or
-`~/.config/codex/config.yaml`):
+Codex (verified on codex-cli 0.134.0) reads hooks from `~/.codex/hooks.json`
+(same nested shape as Claude `settings.json`), and only runs them when the
+feature flag is enabled in `~/.codex/config.toml`. The Copet app installs both
+automatically (Settings → Install next to Codex); it MERGES its entry, leaving
+any other tools' hooks in that file untouched. Manual equivalent:
 
-```yaml
-# ~/.config/codex/config.yaml  (adjust path for your Codex version)
-hooks:
-  preToolUse:
-    - command: "copet-hook --agent codex"
-  notifications:
-    - command: "copet-hook --agent codex"
+```jsonc
+// ~/.codex/hooks.json  — one matcher-less entry per event
+{
+  "hooks": {
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "copet-hook --agent codex" }] }],
+    "PreToolUse":       [{ "hooks": [{ "type": "command", "command": "copet-hook --agent codex" }] }],
+    "PermissionRequest":[{ "hooks": [{ "type": "command", "command": "copet-hook --agent codex" }] }],
+    "Stop":             [{ "hooks": [{ "type": "command", "command": "copet-hook --agent codex" }] }],
+    "SubagentStop":     [{ "hooks": [{ "type": "command", "command": "copet-hook --agent codex" }] }]
+  }
+}
 ```
 
-Mapping:
+```toml
+# ~/.codex/config.toml  — required, else Codex ignores hooks
+[features]
+hooks = true
+```
+
+> Codex requires hooks to be trusted; if a session ignores the hook, run
+> `/hooks` in Codex and trust the Copet entry.
+
+Mapping (payload field `hook_event_name`, PascalCase):
 
 | Codex event | → Copet state |
 |---|---|
-| `preToolUse` | `working` |
-| `tui.notifications` → `approval-requested` | `waiting` |
-| `tui.notifications` → `agent-turn-complete` | `done` |
+| `UserPromptSubmit` / `PreToolUse` / `PostToolUse` / `SubagentStart` | `working` |
+| `PermissionRequest` | `waiting` |
+| `Stop` / `SubagentStop` | `done` |
+
+`Stop` / `SubagentStop` payloads carry `last_assistant_message` — Copet surfaces
+it as the session's last message (assistant narration), and if that text reads
+as a question the turn is reclassified `done → waiting` ("needs input").
 
 ---
 

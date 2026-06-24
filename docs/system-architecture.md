@@ -240,9 +240,10 @@ Non-Claude agents populate only core + enrichment fields; transcript fields rema
 - Change here = change in 2 places (Rust + TS mirror)
 
 #### copet-hook
-- **main.rs:** Entry point; reads hook JSON line from stdin; enriches event with transcript data (Claude only, when opt-in enabled)
-- **map_claude.rs:** Parse Claude Code hook → AgentEvent; extract tool_input (condensed), full cwd, message, prompt
-- **map_codex.rs:** Parse Codex CLI hook → AgentEvent; populate only core fields (cwd_full, message where available)
+- **main.rs:** Entry point; reads hook JSON line from stdin; enriches event with transcript data (Claude only, when opt-in enabled); reclassifies question-ending turns `done → waiting` via `question_detect`
+- **map_claude.rs:** Parse Claude Code hook → AgentEvent; extract tool_input (condensed — prefers Bash `description`), full cwd, message, prompt
+- **map_codex.rs:** Parse Codex CLI hook (`hook_event_name`, PascalCase) → AgentEvent; Stop/SubagentStop capture `last_assistant_message` → `last_message` (assistant narration)
+- **question_detect.rs:** NEW—pure heuristic on the last assistant message; when a finished turn ends with a question, the orchestrator emits `waiting` instead of `done`
 - **map_gemini.rs:** Parse Gemini CLI hook → AgentEvent; populate only core fields
 - **transcript.rs:** NEW—when opt-in enabled, read bounded 256KB tail of Claude `transcript_path` JSONL (on demand, per event); extract model, task summary (`ai-title`), last assistant text, tokens (input+cache, output); UTF-8-safe truncation; any error → None (no panic/block)
 - Writes enriched AgentEvent (JSON) to socket at `/tmp/copet-{uid}.sock`

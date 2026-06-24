@@ -363,9 +363,10 @@ pub fn copet_config_path() -> String  // ~/.copet/hook-config.json (opt-in read_
 
 | File | Purpose |
 |------|---------|
-| **main.rs** | Read hook JSON from stdin; route to mapper; enrich Claude events with transcript data (if opt-in enabled); write AgentEvent to socket |
-| **map_claude.rs** | Parse Claude Code hook JSON → AgentEvent; extract enrichment fields (tool_input, cwd_full, message, prompt) |
-| **map_codex.rs** | Parse Codex CLI hook JSON → AgentEvent; populate core fields (cwd_full, message where available) |
+| **main.rs** | Read hook JSON from stdin; route to mapper; enrich Claude events with transcript data (if opt-in enabled); reclassify question-ending turns `done → waiting` (`question_detect`); write AgentEvent to socket |
+| **map_claude.rs** | Parse Claude Code hook JSON → AgentEvent; extract enrichment fields (tool_input — prefers Bash `description`, cwd_full, message, prompt) |
+| **map_codex.rs** | Parse Codex CLI hook JSON (`hook_event_name`, PascalCase) → AgentEvent; Stop/SubagentStop capture `last_assistant_message` → `last_message` (assistant narration) |
+| **question_detect.rs** | NEW—pure heuristic: does the last assistant message read as a question? Orchestrator flips a finished turn to `waiting` so the pet shows "needs input" |
 | **map_gemini.rs** | Parse Gemini CLI hook JSON → AgentEvent; populate core fields |
 | **transcript.rs** | NEW—read bounded 256KB tail of Claude transcript JSONL; extract model, task summary (ai-title), last assistant text, tokens; UTF-8-safe truncation; graceful error handling (None on any error, never panics) |
 
