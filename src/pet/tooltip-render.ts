@@ -1,9 +1,12 @@
 /**
  * tooltip-render.ts — pure HTML builder for the pet session panel.
  *
- * No DOM/Tauri deps so it can be unit-tested directly. Each session is a 2-line
- * row: line 1 = agent badge + name + running duration; line 2 = state label +
- * active tool (when working) + last-activity. Shows up to MAX_ROWS + "+N more".
+ * No DOM/Tauri deps so it can be unit-tested directly. Emits semantic `cpt-*`
+ * classes only (colours/fonts live in the scoped stylesheet injected by
+ * pet-tooltip.ts). Each session is a compact card: header (status dot + agent
+ * badge + name + prompt-runtime timer), a state-label line, an optional command
+ * line (tool+input while working / permission message while waiting), and an
+ * optional model+tokens meta line. Shows up to MAX_ROWS + "+N more".
  */
 
 import type { SessionSnapshot, LabelTheme } from "../types/session-snapshot.js";
@@ -39,65 +42,81 @@ export function hasActiveSessions(sessions: SessionSnapshot[]): boolean {
   return sessions.some((s) => s.state === "working" || s.state === "waiting");
 }
 
+/**
+ * Build the command line for a row: tool (+ enriched input) while working, the
+ * permission message while waiting, empty otherwise. Tool name is wrapped so the
+ * stylesheet can accent it; everything agent-controlled is escaped.
+ */
+function commandLine(s: SessionSnapshot): string {
+  if (s.state === "working" && s.tool) {
+    const toolName = `<span class="cpt-tool">${escHtml(s.tool)}</span>`;
+    return s.toolInput
+      ? `<div class="cpt-cmd">${toolName} · ${escHtml(s.toolInput)}</div>`
+      : `<div class="cpt-cmd">${toolName}</div>`;
+  }
+  if (s.state === "waiting" && s.message) {
+    return `<div class="cpt-cmd cpt-cmd--ask">${escHtml(s.message)}</div>`;
+  }
+  return "";
+}
+
+/** Model + tokens meta line (opt-in enrichment); empty when neither present. */
+function metaLine(s: SessionSnapshot): string {
+  const modelPart = s.model ? `<span class="cpt-model">${escHtml(shortModel(s.model))}</span>` : "";
+  const tokensPart =
+    s.tokensIn != null || s.tokensOut != null
+      ? `<span class="cpt-tok-in">↑${formatTokens(s.tokensIn ?? 0)}</span> <span class="cpt-tok-out">↓${formatTokens(s.tokensOut ?? 0)}</span>`
+      : "";
+  if (!modelPart && !tokensPart) return "";
+  const gap = modelPart && tokensPart ? " " : "";
+  return `<div class="cpt-meta">${modelPart}${gap}${tokensPart}</div>`;
+}
+
+/**
+ * Hover title: full cwd + last prompt + summary + last message, escaped. Kept to
+ * preserve the detail (panel stays compact); shown by the browser on hover.
+ */
+function hoverTitle(s: SessionSnapshot): string {
+  const bits = [displayName(s)];
+  if (s.cwdFull) bits.push(s.cwdFull);
+  if (s.prompt) bits.push(`> ${s.prompt}`);
+  if (s.summary) bits.push(`≡ ${s.summary}`);
+  if (s.lastMessage) bits.push(s.lastMessage);
+  return escHtml(bits.join("\n"));
+}
+
 /** Build the panel inner HTML for the given data + clock (epoch seconds). */
 export function renderTooltipHtml(data: TooltipData, nowSeconds: number): string {
   const sessions = sortSessions(data.sessions);
   if (sessions.length === 0) {
-    return `<div style="opacity:0.8">Chưa có session nào</div>`;
+    return `<div class="cpt-empty">Chưa có session nào</div>`;
   }
 
   const rows = sessions.slice(0, TOOLTIP_MAX_ROWS).map((s) => {
     const label = getStateLabel(data.theme, s.state);
     const name = escHtml(displayName(s));
     const badge = escHtml(agentBadge(s.agent));
+    // Prompt-runtime: how long the current turn has run (since = turn start).
     const dur = formatDuration(nowSeconds - s.since);
-    const act = formatDuration(nowSeconds - s.ts);
-    // Enriched tool line: "Bash: pnpm test" when tool_input is present, else
-    // just the bare tool name (keeps the compact panel from getting noisy).
-    const toolPart =
-      s.state === "working"
-        ? s.toolInput
-          ? ` · ${s.tool ? escHtml(s.tool) + ": " : ""}${escHtml(s.toolInput)}`
-          : s.tool
-            ? ` · ${escHtml(s.tool)}`
-            : ""
-        : "";
-    // Why a session is paused (permission/idle prompt), shown only when waiting.
-    const messagePart = s.state === "waiting" && s.message ? ` · ${escHtml(s.message)}` : "";
-    const badgePart = badge ? `<b style="opacity:0.55">${badge}</b> ` : "";
-    // Transcript enrichment (opt-in): model + tokens on a compact meta line;
-    // summary + last message go into the hover title to keep the panel tight.
-    const modelPart = s.model ? escHtml(shortModel(s.model)) : "";
-    const tokensPart =
-      s.tokensIn != null || s.tokensOut != null
-        ? `${modelPart ? " · " : ""}↑${formatTokens(s.tokensIn ?? 0)} ↓${formatTokens(s.tokensOut ?? 0)}`
-        : "";
-    const metaLine =
-      modelPart || tokensPart
-        ? `<div style="opacity:0.5;font-size:11px">${modelPart}${tokensPart}</div>`
-        : "";
-    // Full cwd + last prompt + summary + last message go into the row title
-    // (hover) to keep the pet panel tight while still exposing the detail.
-    const titleBits = [displayName(s)];
-    if (s.cwdFull) titleBits.push(s.cwdFull);
-    if (s.prompt) titleBits.push(`> ${s.prompt}`);
-    if (s.summary) titleBits.push(`≡ ${s.summary}`);
-    if (s.lastMessage) titleBits.push(s.lastMessage);
-    const title = escHtml(titleBits.join("\n"));
+    const badgePart = badge ? `<span class="cpt-badge">${badge}</span>` : "";
+
     return (
-      `<div style="margin-bottom:3px">` +
-      `<div style="display:flex;gap:6px;justify-content:space-between">` +
-      `<span title="${title}">${badgePart}${name}</span>` +
-      `<span style="opacity:0.7">${dur}</span>` +
-      `</div>` +
-      `<div style="opacity:0.6;font-size:11px">${escHtml(label.emoji)} ${escHtml(label.text)}${toolPart}${messagePart} · ${act} trước</div>` +
-      metaLine +
+      `<div class="cpt-row cpt-row--${s.state}">` +
+        `<div class="cpt-head">` +
+          `<span class="cpt-dot cpt-dot--${s.state}"></span>` +
+          badgePart +
+          `<span class="cpt-name" title="${hoverTitle(s)}">${name}</span>` +
+          `<span class="cpt-timer">${dur}</span>` +
+        `</div>` +
+        `<div class="cpt-state cpt-state--${s.state}">${escHtml(label.emoji)} ${escHtml(label.text)}</div>` +
+        commandLine(s) +
+        metaLine(s) +
       `</div>`
     );
   });
 
   if (sessions.length > TOOLTIP_MAX_ROWS) {
-    rows.push(`<div style="opacity:0.6">+${sessions.length - TOOLTIP_MAX_ROWS} more</div>`);
+    rows.push(`<div class="cpt-more">+${sessions.length - TOOLTIP_MAX_ROWS} more</div>`);
   }
 
   return rows.join("");
