@@ -111,6 +111,12 @@ fn summarize_tool_input(v: &serde_json::Value) -> Option<String> {
     let obj = v.as_object()?;
     let str_field = |k: &str| obj.get(k).and_then(|x| x.as_str());
 
+    // Bash carries a human-readable `description` (e.g. "run tests") next to the
+    // raw `command`; prefer it for a readable line, like agentpet. Only Bash-style
+    // tools populate `description`, so it never shadows file/pattern/url tools.
+    if let Some(desc) = str_field("description") {
+        return clip(desc, MAX_TOOL_INPUT);
+    }
     if let Some(cmd) = str_field("command") {
         return clip(cmd, MAX_TOOL_INPUT);
     }
@@ -165,10 +171,18 @@ mod tests {
     }
 
     #[test]
-    fn pre_tool_use_bash_extracts_command() {
+    fn pre_tool_use_bash_prefers_description_over_command() {
+        // Claude's Bash tool carries a readable `description` — prefer it.
         let json = r#"{"hook_event_name":"PreToolUse","session_id":"s1","tool_name":"Bash","tool_input":{"command":"pnpm test","description":"run tests"}}"#;
         let ev = parse(json).unwrap();
-        assert_eq!(ev.tool_input.as_deref(), Some("pnpm test"));
+        assert_eq!(ev.tool_input.as_deref(), Some("run tests"));
+    }
+
+    #[test]
+    fn pre_tool_use_bash_falls_back_to_command_without_description() {
+        let json = r#"{"hook_event_name":"PreToolUse","session_id":"s1","tool_name":"Bash","tool_input":{"command":"ls -la"}}"#;
+        let ev = parse(json).unwrap();
+        assert_eq!(ev.tool_input.as_deref(), Some("ls -la"));
     }
 
     #[test]

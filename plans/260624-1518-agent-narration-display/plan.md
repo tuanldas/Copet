@@ -41,7 +41,7 @@ Mục tiêu: popup/HUD hiển thị **lời tường thuật assistant** (prose 
 |-------|------|--------|
 | 1 | [Codex narration via Stop hook](./phase-01-codex-narration-via-stop-hook.md) | Completed |
 | 2 | [Question detection waiting state](./phase-02-question-detection-waiting-state.md) | Completed |
-| 3 | [Claude tool description enrichment](./phase-03-claude-tool-description-enrichment.md) | Pending |
+| 3 | [Claude tool description enrichment](./phase-03-claude-tool-description-enrichment.md) | Completed |
 | 4 | [Gemini narration via wrapper](./phase-04-gemini-narration-via-wrapper.md) | Pending |
 | 5 | [Themed activity phrases](./phase-05-themed-activity-phrases.md) | Pending |
 

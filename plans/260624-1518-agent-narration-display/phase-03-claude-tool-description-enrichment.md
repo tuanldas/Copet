@@ -1,8 +1,8 @@
 ---
 phase: 3
-title: "Claude tool description enrichment"
-status: pending
-effort: "S (1 fn + tests trong map_claude)"
+title: Claude tool description enrichment
+status: completed
+effort: S (1 fn + tests trong map_claude)
 ---
 
 # Phase 3: Claude tool description enrichment
