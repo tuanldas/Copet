@@ -49,11 +49,15 @@
 
 .session-badge {
   flex: 0 0 auto;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  opacity: 0.55;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+}
+
+.session-badge svg {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 
 /* Model badge (transcript opt-in), e.g. "opus-4-8". Sits next to the agent badge. */

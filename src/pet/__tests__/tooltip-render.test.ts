@@ -62,10 +62,12 @@ describe("renderTooltipHtml", () => {
     expect(html).toContain("cpt-timer");
   });
 
-  it("shows the agent badge", () => {
+  it("shows the agent icon badge (svg, not text)", () => {
     const html = renderTooltipHtml({ sessions: [snap("working", { project: "p" })], theme: "kitchen" }, NOW);
-    expect(html).toContain("Claude");
     expect(html).toContain("cpt-badge");
+    expect(html).toContain("<svg");
+    expect(html).toContain('data-agent="claude-code"');
+    expect(html).not.toContain(">Claude<"); // no longer a text badge
   });
 
   it("marks the status dot with the session state", () => {
@@ -136,7 +138,7 @@ describe("renderTooltipHtml", () => {
     expect(html).not.toContain("<script>");
   });
 
-  it("shows model (claude- prefix stripped) and compact tokens when present", () => {
+  it("never renders model or tokens, even when present (meta removed)", () => {
     const html = renderTooltipHtml(
       {
         sessions: [snap("working", { project: "p", model: "claude-opus-4-8", tokensIn: 248000, tokensOut: 1219 })],
@@ -144,10 +146,10 @@ describe("renderTooltipHtml", () => {
       },
       NOW,
     );
-    expect(html).toContain("opus-4-8");
-    expect(html).not.toContain("claude-opus-4-8");
-    expect(html).toContain("248k");
-    expect(html).toContain("1.2k");
+    expect(html).not.toContain("opus");
+    expect(html).not.toContain("248k");
+    expect(html).not.toContain("↑");
+    expect(html).not.toContain("cpt-meta");
   });
 
   it("puts summary + last message into the hover title and escapes them", () => {
@@ -163,11 +165,6 @@ describe("renderTooltipHtml", () => {
     expect(html).not.toContain("<b>mode</b>");
   });
 
-  it("omits the meta line entirely when no model/tokens (opt-in off)", () => {
-    const html = renderTooltipHtml({ sessions: [snap("working", { project: "p" })], theme: "kitchen" }, NOW);
-    expect(html).not.toContain("↑");
-    expect(html).not.toContain("cpt-meta");
-  });
 });
 
 describe("hasActiveSessions", () => {

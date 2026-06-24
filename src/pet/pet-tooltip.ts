@@ -61,11 +61,8 @@ const PANEL_CSS = `@import url('https://fonts.googleapis.com/css2?family=Pixelif
 .cpt-dot--done{background:#22c55e;}
 .cpt-dot--idle{background:#94a3b8;}
 .cpt-dot--error{background:#ef4444;}
-.cpt-badge{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#fff;border-radius:5px;padding:1px 6px;flex:0 0 auto;background:#94a3b8;}
-.cpt-row--working .cpt-badge{background:#3b82f6;}
-.cpt-row--waiting .cpt-badge{background:#f59e0b;}
-.cpt-row--done .cpt-badge{background:#22c55e;}
-.cpt-row--error .cpt-badge{background:#ef4444;}
+.cpt-badge{flex:0 0 auto;display:inline-flex;width:16px;height:16px;}
+.cpt-badge svg{width:16px;height:16px;display:block;}
 .cpt-name{font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:500;font-size:13.5px;color:#1e1e2e;flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .cpt-timer{font-family:'Pixelify Sans',ui-monospace,monospace;font-size:13px;color:#64748b;flex:0 0 auto;font-variant-numeric:tabular-nums;}
 .cpt-state{margin-top:7px;font-size:12.5px;font-weight:700;}
@@ -77,10 +74,6 @@ const PANEL_CSS = `@import url('https://fonts.googleapis.com/css2?family=Pixelif
 .cpt-cmd{margin-top:5px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;color:#1e1e2e;line-height:1.5;overflow-wrap:anywhere;}
 .cpt-cmd--ask{font-family:'Nunito',system-ui,sans-serif;font-size:12.5px;color:#1e1e2e;}
 .cpt-tool{color:#3b82f6;font-weight:500;}
-.cpt-meta{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px;color:#64748b;font-variant-numeric:tabular-nums;}
-.cpt-model{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10.5px;background:rgba(30,30,46,0.06);border-radius:5px;padding:2px 6px;}
-.cpt-tok-in{color:#22c55e;font-weight:700;}
-.cpt-tok-out{color:#3b82f6;font-weight:700;}
 .cpt-more{padding:6px 14px;font-size:11px;color:#94a3b8;}`;
 
 /** Inject the scoped stylesheet once (shared by every panel instance). */

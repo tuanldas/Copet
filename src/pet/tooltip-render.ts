@@ -4,17 +4,16 @@
  * No DOM/Tauri deps so it can be unit-tested directly. Emits semantic `cpt-*`
  * classes only (colours/fonts live in the scoped stylesheet injected by
  * pet-tooltip.ts). Each session is a compact card: header (status dot + agent
- * badge + name + prompt-runtime timer), a state-label line, an optional command
- * line (tool+input while working / permission message while waiting), and an
- * optional model+tokens meta line. Shows up to MAX_ROWS + "+N more".
+ * brand icon + name + prompt-runtime timer), a state-label line, and an optional
+ * command line (tool+input while working / permission message while waiting).
+ * Shows up to MAX_ROWS + "+N more".
  */
 
 import type { SessionSnapshot, LabelTheme } from "../types/session-snapshot.js";
 import { getStateLabel } from "../agent-bridge/state-labels.js";
 import { formatDuration } from "../ui/shared/session-duration.js";
 import { sortSessions, displayName } from "../ui/shared/session-list-model.js";
-import { agentBadge } from "../ui/shared/agent-badge.js";
-import { formatTokens, shortModel } from "../ui/shared/session-format.js";
+import { agentIcon } from "../ui/shared/agent-icon.js";
 
 /** Data shown in the panel. */
 export interface TooltipData {
@@ -60,18 +59,6 @@ function commandLine(s: SessionSnapshot): string {
   return "";
 }
 
-/** Model + tokens meta line (opt-in enrichment); empty when neither present. */
-function metaLine(s: SessionSnapshot): string {
-  const modelPart = s.model ? `<span class="cpt-model">${escHtml(shortModel(s.model))}</span>` : "";
-  const tokensPart =
-    s.tokensIn != null || s.tokensOut != null
-      ? `<span class="cpt-tok-in">↑${formatTokens(s.tokensIn ?? 0)}</span> <span class="cpt-tok-out">↓${formatTokens(s.tokensOut ?? 0)}</span>`
-      : "";
-  if (!modelPart && !tokensPart) return "";
-  const gap = modelPart && tokensPart ? " " : "";
-  return `<div class="cpt-meta">${modelPart}${gap}${tokensPart}</div>`;
-}
-
 /**
  * Hover title: full cwd + last prompt + summary + last message, escaped. Kept to
  * preserve the detail (panel stays compact); shown by the browser on hover.
@@ -95,10 +82,12 @@ export function renderTooltipHtml(data: TooltipData, nowSeconds: number): string
   const rows = sessions.slice(0, TOOLTIP_MAX_ROWS).map((s) => {
     const label = getStateLabel(data.theme, s.state);
     const name = escHtml(displayName(s));
-    const badge = escHtml(agentBadge(s.agent));
+    // Agent brand icon (trusted SVG keyed by enum — not escaped). State colour is
+    // carried separately by the status dot.
+    const badge = agentIcon(s.agent);
     // Prompt-runtime: how long the current turn has run (since = turn start).
     const dur = formatDuration(nowSeconds - s.since);
-    const badgePart = badge ? `<span class="cpt-badge">${badge}</span>` : "";
+    const badgePart = badge ? `<span class="cpt-badge" data-agent="${s.agent}">${badge}</span>` : "";
 
     return (
       `<div class="cpt-row cpt-row--${s.state}">` +
@@ -110,7 +99,6 @@ export function renderTooltipHtml(data: TooltipData, nowSeconds: number): string
         `</div>` +
         `<div class="cpt-state cpt-state--${s.state}">${escHtml(label.emoji)} ${escHtml(label.text)}</div>` +
         commandLine(s) +
-        metaLine(s) +
       `</div>`
     );
   });
