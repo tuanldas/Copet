@@ -83,9 +83,9 @@ fn claude_user_prompt_submit_captures_prompt() {
 #[test]
 fn codex_leaves_claude_only_fields_null() {
     let json = r#"{
-        "event": "preToolUse",
+        "hook_event_name": "PreToolUse",
         "session_id": "sess-codex-00e",
-        "tool": "bash",
+        "tool_name": "shell",
         "cwd": "/home/dev/codex-project"
     }"#;
     let ev = map_codex::parse(json).expect("should parse");
@@ -146,37 +146,41 @@ fn claude_subagent_start_working() {
 #[test]
 fn codex_pre_tool_use_working() {
     let json = r#"{
-        "event": "preToolUse",
+        "hook_event_name": "PreToolUse",
         "session_id": "sess-codex-001",
-        "tool": "bash",
+        "tool_name": "shell",
         "cwd": "/home/dev/codex-project"
     }"#;
     let ev = map_codex::parse(json).expect("should parse");
     assert_eq!(ev.state, State::Working);
-    assert_eq!(ev.tool.as_deref(), Some("bash"));
+    assert_eq!(ev.tool.as_deref(), Some("shell"));
     assert_eq!(ev.project.as_deref(), Some("codex-project"));
 }
 
 #[test]
-fn codex_approval_requested_waiting() {
+fn codex_permission_request_waiting() {
     let json = r#"{
-        "event": "tui.notifications",
-        "session_id": "sess-codex-002",
-        "notification": { "type": "approval-requested" }
+        "hook_event_name": "PermissionRequest",
+        "session_id": "sess-codex-002"
     }"#;
     let ev = map_codex::parse(json).expect("should parse");
     assert_eq!(ev.state, State::Waiting);
 }
 
 #[test]
-fn codex_agent_turn_complete_done() {
+fn codex_stop_done_with_narration() {
     let json = r#"{
-        "event": "tui.notifications",
+        "hook_event_name": "Stop",
         "session_id": "sess-codex-003",
-        "notification": { "type": "agent-turn-complete" }
+        "last_assistant_message": "I've completed the refactoring."
     }"#;
     let ev = map_codex::parse(json).expect("should parse");
     assert_eq!(ev.state, State::Done);
+    // Codex narration arrives inline on Stop → last_message (no transcript read).
+    assert_eq!(
+        ev.last_message.as_deref(),
+        Some("I've completed the refactoring.")
+    );
 }
 
 // ──────────────────────────────────────────────────────────
