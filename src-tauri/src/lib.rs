@@ -216,8 +216,37 @@ fn init_windows(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     // transparent/always-on-top creation quirk, so hide it explicitly here.
     let _ = sessions.hide();
 
-    // Shop window: show in debug for visual verification; hidden in release.
-    init_shop_window(app)?;
+    // Stats HUD: same runtime-build rationale as the pet/sessions. A
+    // config-declared window can't be promoted onto another app's fullscreen
+    // Space, so the HUD vanished (and was undraggable) when an external monitor
+    // ran a fullscreen app. Built here (post-accessory-policy) + overlay
+    // behavior so it floats there like the popover. Hidden until open_hud.
+    let stats = build_stats_window(app)?;
+    #[cfg(target_os = "macos")]
+    set_overlay_collection_behavior(&stats);
+    let _ = stats.hide();
+
+    // Shop + Settings: full windows (title bar; Shop resizable), but the same
+    // runtime-build + overlay rationale as the HUD — promote them so they're
+    // usable over another app's fullscreen Space. Built post-accessory-policy.
+    let shop = build_shop_window(app)?;
+    #[cfg(target_os = "macos")]
+    set_overlay_collection_behavior(&shop);
+    // Debug: show the shop for visual verification during `pnpm tauri dev`.
+    #[cfg(debug_assertions)]
+    {
+        shop.show()?;
+        shop.set_focus()?;
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        let _ = shop.hide();
+    }
+
+    let settings = build_settings_window(app)?;
+    #[cfg(target_os = "macos")]
+    set_overlay_collection_behavior(&settings);
+    let _ = settings.hide();
 
     Ok(())
 }
@@ -278,6 +307,29 @@ fn build_sessions_window(app: &mut App) -> Result<WebviewWindow, Box<dyn std::er
     Ok(win)
 }
 
+/// Build the stats/HUD window at runtime (post-accessory-policy) so it can be
+/// promoted onto other apps' fullscreen Spaces — a config-declared window cannot
+/// (see build_pet_window). Mirrors the options it previously declared in
+/// tauri.conf.json; opaque panel with a shadow, hidden until shown via open_hud.
+fn build_stats_window(app: &mut App) -> Result<WebviewWindow, Box<dyn std::error::Error>> {
+    let win = WebviewWindowBuilder::new(app, "stats", WebviewUrl::App("hud.html".into()))
+        .title("Copet HUD")
+        .inner_size(300.0, 380.0)
+        .transparent(false)
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .shadow(true)
+        .visible(false)
+        .focused(false)
+        .center()
+        .visible_on_all_workspaces(true)
+        .build()?;
+
+    Ok(win)
+}
+
 /// macOS: let a window appear on top of *other apps'* native-fullscreen Spaces.
 /// Used for both the pet overlay and the sessions popover.
 ///
@@ -315,21 +367,49 @@ fn set_overlay_collection_behavior(win: &WebviewWindow) {
     ns_window.setLevel(NSScreenSaverWindowLevel);
 }
 
-/// Initialise the shop window. In debug builds, show it for visual verification
-/// (handy during `pnpm tauri dev`); it stays hidden in release.
-fn init_shop_window(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
-    let shop = app
-        .get_webview_window("shop")
-        .ok_or("shop window not found in tauri.conf.json — check windows array")?;
+/// Build the shop window at runtime (post-accessory-policy) so it can be
+/// promoted onto other apps' fullscreen Spaces — a config-declared window cannot
+/// (see build_pet_window). A normal titled, resizable window; the caller shows
+/// it on demand (and in debug for visual verification). Mirrors the options it
+/// previously declared in tauri.conf.json.
+fn build_shop_window(app: &mut App) -> Result<WebviewWindow, Box<dyn std::error::Error>> {
+    let win = WebviewWindowBuilder::new(app, "shop", WebviewUrl::App("shop.html".into()))
+        .title("Copet Shop")
+        .inner_size(400.0, 520.0)
+        .transparent(false)
+        .decorations(true)
+        .always_on_top(false)
+        .skip_taskbar(false)
+        .resizable(true)
+        .visible(false)
+        .focused(true)
+        .center()
+        .build()?;
 
-    #[cfg(debug_assertions)]
-    {
-        shop.show()?;
-        shop.set_focus()?;
-    }
+    Ok(win)
+}
 
-    let _ = shop; // suppress unused warning in release
-    Ok(())
+/// Build the settings window at runtime (post-accessory-policy) so it can be
+/// promoted onto other apps' fullscreen Spaces — a config-declared window cannot
+/// (see build_pet_window). A normal titled, fixed-size window; shown on demand
+/// via open_settings. Mirrors the options it previously declared in
+/// tauri.conf.json.
+fn build_settings_window(app: &mut App) -> Result<WebviewWindow, Box<dyn std::error::Error>> {
+    let win =
+        WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
+            .title("Copet Settings")
+            .inner_size(420.0, 480.0)
+            .transparent(false)
+            .decorations(true)
+            .always_on_top(false)
+            .skip_taskbar(false)
+            .resizable(false)
+            .visible(false)
+            .focused(true)
+            .center()
+            .build()?;
+
+    Ok(win)
 }
 
 /// Agent-event IPC socket daemon (Phase 03).
