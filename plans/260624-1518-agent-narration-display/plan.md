@@ -43,7 +43,7 @@ Mục tiêu: popup/HUD hiển thị **lời tường thuật assistant** (prose 
 | 2 | [Question detection waiting state](./phase-02-question-detection-waiting-state.md) | Completed |
 | 3 | [Claude tool description enrichment](./phase-03-claude-tool-description-enrichment.md) | Completed |
 | 4 | [Gemini narration via wrapper](./phase-04-gemini-narration-via-wrapper.md) | Pending |
-| 5 | [Themed activity phrases](./phase-05-themed-activity-phrases.md) | Pending |
+| 5 | [Themed activity phrases](./phase-05-themed-activity-phrases.md) | Completed |
 
 **Thứ tự đề xuất:** 1 → 2 (Phase 2 phần Codex phụ thuộc Phase 1) → 3 → 5 → **4 cuối** (rủi ro cao nhất, giá trị thấp nhất). Phase 3/4/5 độc lập nhau.
 

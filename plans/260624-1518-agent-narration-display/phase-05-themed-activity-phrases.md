@@ -1,8 +1,8 @@
 ---
 phase: 5
-title: "Themed activity phrases"
-status: pending
-effort: "S-M (FE pure module + wire + tests)"
+title: Themed activity phrases
+status: completed
+effort: S-M (FE pure module + wire + tests)
 ---
 
 # Phase 5: Themed activity phrases

@@ -14,6 +14,7 @@ import { getStateLabel } from "../agent-bridge/state-labels.js";
 import { formatDuration } from "../ui/shared/session-duration.js";
 import { sortSessions, displayName } from "../ui/shared/session-list-model.js";
 import { agentIcon } from "../ui/shared/agent-icon.js";
+import { toolPhrase } from "./activity-phrases.js";
 
 /** Data shown in the panel. */
 export interface TooltipData {
@@ -48,10 +49,14 @@ export function hasActiveSessions(sessions: SessionSnapshot[]): boolean {
  */
 function commandLine(s: SessionSnapshot): string {
   if (s.state === "working" && s.tool) {
-    const toolName = `<span class="cpt-tool">${escHtml(s.tool)}</span>`;
+    // A friendly themed phrase ("Bash" → "Compiling…") replaces the raw tool name;
+    // tool_input (command / description / file) stays as the specific detail.
+    // Seeded by sessionId so the phrase is stable per session across re-renders.
+    const phrase = toolPhrase(s.tool, s.toolInput ?? undefined, s.sessionId);
+    const label = `<span class="cpt-tool">${escHtml(phrase)}</span>`;
     return s.toolInput
-      ? `<div class="cpt-cmd">${toolName} · ${escHtml(s.toolInput)}</div>`
-      : `<div class="cpt-cmd">${toolName}</div>`;
+      ? `<div class="cpt-cmd">${label} · ${escHtml(s.toolInput)}</div>`
+      : `<div class="cpt-cmd">${label}</div>`;
   }
   if (s.state === "waiting") {
     // Permission/notification text wins; else the assistant's own question

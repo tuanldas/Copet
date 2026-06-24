@@ -77,12 +77,12 @@ describe("renderTooltipHtml", () => {
     expect(waiting).toContain("cpt-dot--waiting");
   });
 
-  it("shows the active tool on its own command line only when working", () => {
+  it("shows a themed activity line (raw tool name replaced) only when working", () => {
     const working = renderTooltipHtml({ sessions: [snap("working", { project: "p", tool: "Bash" })], theme: "kitchen" }, NOW);
-    expect(working).toContain("Bash");
     expect(working).toContain("cpt-cmd");
+    expect(working).not.toContain(">Bash<"); // raw tool name → friendly themed phrase
     const done = renderTooltipHtml({ sessions: [snap("done", { project: "p", tool: "Bash" })], theme: "kitchen" }, NOW);
-    expect(done).not.toContain("Bash");
+    expect(done).not.toContain("cpt-cmd");
   });
 
   it("shows the enriched tool input next to the tool when working", () => {
