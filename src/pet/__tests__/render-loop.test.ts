@@ -11,8 +11,6 @@ import type { AnimResolution } from "../animation-controller.js";
 
 const PET_W = 96;
 const PET_H = 104;
-/** Phải khớp RESTING_MARGIN trong render-loop.ts */
-const RESTING_MARGIN = 8;
 
 const RES: AnimResolution = { row: 0, frames: 4, fps: 8, loop: true };
 
@@ -27,14 +25,14 @@ describe("RenderLoop position (pet đứng yên)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("nghỉ ở đáy-giữa cửa sổ", () => {
+  it("nghỉ ở giữa cửa sổ", () => {
     const loop = new RenderLoop(
       { petWidth: PET_W, petHeight: PET_H, canvas: fakeCanvas(220, 220) },
       RES,
       () => {},
     );
     expect(loop.position.x).toBe((220 - PET_W) / 2);
-    expect(loop.position.y).toBe(220 - PET_H - RESTING_MARGIN);
+    expect(loop.position.y).toBe((220 - PET_H) / 2);
   });
 
   it("KHÔNG di chuyển pet khi đang walk", () => {

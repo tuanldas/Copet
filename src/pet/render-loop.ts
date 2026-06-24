@@ -10,9 +10,6 @@
 import type { AnimResolution } from "./animation-controller.js";
 import type { PetState } from "./pet-state-machine.js";
 
-/** Lề (px) giữ pet cách đáy cửa sổ ở vị trí nghỉ — chừa khoảng trống phía trên cho panel session. */
-const RESTING_MARGIN = 8;
-
 /** Callback được gọi mỗi frame render */
 export type FrameCallback = (params: FrameParams) => void;
 
@@ -63,12 +60,15 @@ export class RenderLoop {
     this.currentResolution = initialResolution;
     this.callback = callback;
 
-    // Vị trí nghỉ: đáy-giữa canvas. Pet đứng yên (không roam), nên panel session
-    // ghim phía trên có tối đa khoảng trống dọc trong cửa sổ nhỏ (220×220).
+    // Vị trí nghỉ: GIỮA canvas (pet đứng yên) — đúng điểm khởi đầu cũ nên LUÔN
+    // hiển thị. Fallback window.innerHeight + clamp ≥0 để pet không bao giờ rơi
+    // ra ngoài cửa sổ dù clientWidth/Height chưa layout (=0) lúc khởi tạo.
     const canvas = config.canvas;
+    const cw = canvas.clientWidth || window.innerWidth || 220;
+    const ch = canvas.clientHeight || window.innerHeight || 220;
     this.position = {
-      x: (canvas.clientWidth - config.petWidth) / 2,
-      y: canvas.clientHeight - config.petHeight - RESTING_MARGIN,
+      x: Math.max(0, (cw - config.petWidth) / 2),
+      y: Math.max(0, (ch - config.petHeight) / 2),
     };
   }
 
