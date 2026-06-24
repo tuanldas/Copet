@@ -5,6 +5,7 @@
   "windows": ["stats"],
   "permissions": [
     "core:default",
+    "core:window:allow-start-dragging",
     "core:event:default",
     "store:default"
   ]

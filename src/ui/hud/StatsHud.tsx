@@ -13,6 +13,7 @@
 
 import { createSignal, onMount, onCleanup } from "solid-js";
 import type { Component } from "solid-js";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { initTamagotchi } from "../../tamagotchi/index.js";
 import { getPetData, onPetDataChange } from "../../tamagotchi/pet-store.js";
 import type { PetData } from "../../tamagotchi/types.js";
@@ -43,6 +44,20 @@ function xpArcDashoffset(totalXp: number): number {
 const StatsHud: Component = () => {
   const [pet, setPet] = createSignal<PetData>(getPetData());
 
+  // The HUD is a borderless window (decorations:false) with no title bar, so
+  // dragging the panel body moves it. Native startDragging() hands off to the
+  // OS window manager → works across monitors; manual set_position math does
+  // not (see the pet click-through fix / tauri#7890). The HUD is display-only
+  // (no clickable children), so dragging from anywhere is safe.
+  function startWindowDrag(e: MouseEvent): void {
+    if (e.button !== 0) return;
+    void getCurrentWindow()
+      .startDragging()
+      .catch(() => {
+        /* non-fatal: the drag just won't start */
+      });
+  }
+
   onMount(async () => {
     // Client role: hydrate once + mirror tama:state broadcasts. No tick/save.
     await initTamagotchi({ role: "client" });
@@ -65,7 +80,7 @@ const StatsHud: Component = () => {
   const now = createNowSignal();
 
   return (
-    <div id="hud-root">
+    <div id="hud-root" onMouseDown={startWindowDrag}>
       {/* ── Pet portrait ──────────────────────────────────────────────────── */}
       <div class="hud-portrait" aria-label={`Pet stage: ${stage()}`}>
         {/*
