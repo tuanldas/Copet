@@ -11,7 +11,7 @@ function snap(
   state: AgentState,
   extra: Partial<SessionSnapshot> = {},
 ): SessionSnapshot {
-  return { sessionId: "x", agent: "claude-code", project: "proj", state, since: 0, ts: 0, ...extra };
+  return { sessionId: "x", agent: "claude-code", project: "proj", state, tool: null, since: 0, ts: 0, ...extra };
 }
 
 describe("sortSessions", () => {

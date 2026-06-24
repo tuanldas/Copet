@@ -1,14 +1,16 @@
 /**
- * pet-tooltip.ts — DOM overlay tooltip listing running sessions.
+ * pet-tooltip.ts — persistent session panel anchored to the pet.
  *
- * Shows the session list on hover over the pet body and refreshes the duration
- * column every second while visible. Rendering is delegated to the pure
- * renderTooltipHtml() helper (unit-tested separately).
+ * (Was a hover tooltip.) Now ALWAYS visible by default: renders the running
+ * sessions list right next to the pet and follows the pet's position each frame.
+ * Read-only + pointer-events:none so it never blocks clicks / click-through.
+ * Content is built by the pure renderTooltipHtml() helper; data is pushed in by
+ * agent-bridge via update() (sessions + current theme).
  *
  * Usage:
- *   const tooltip = mountTooltip(canvas, () => handle.getPosition());
- *   tooltip.update({ sessions, theme });
- *   tooltip.destroy(); // on unmount
+ *   const panel = mountTooltip(canvas, () => handle.getPosition());
+ *   panel.update({ sessions, theme });
+ *   panel.destroy(); // on unmount
  */
 
 import { renderTooltipHtml, type TooltipData } from "./tooltip-render.js";
@@ -17,21 +19,22 @@ export type { TooltipData };
 
 /** Public handle returned by mountTooltip(). */
 export interface TooltipHandle {
-  /** Update tooltip data (call on every aggregate re-compute / theme change). */
+  /** Update panel data (called by agent-bridge on every aggregate / theme change). */
   update(data: TooltipData): void;
-  /** Remove DOM elements, listeners, and the refresh timer. */
+  /** Remove DOM element, the refresh timer, and the position loop. */
   destroy(): void;
 }
 
-/** Logical pet dimensions — must match pet/index.ts PET_DISPLAY_* constants. */
-const PET_W = 96;
+/** Logical pet height (must match pet/index.ts PET_DISPLAY_HEIGHT) — for flip-below. */
 const PET_H = 104;
+/** Gap between the panel and the pet sprite (px). */
+const GAP = 8;
 
 /**
- * Mount a tooltip DOM overlay for the pet canvas.
+ * Mount the persistent session panel for the pet canvas.
  *
  * @param canvas - #pet-canvas element
- * @param getPosition - returns current pet logical position {x, y}
+ * @param getPosition - returns the pet's current logical position {x, y}
  */
 export function mountTooltip(
   canvas: HTMLCanvasElement,
@@ -39,17 +42,15 @@ export function mountTooltip(
 ): TooltipHandle {
   const el = document.createElement("div");
   el.id = "pet-tooltip";
-  el.setAttribute("role", "tooltip");
   applyBaseStyles(el);
-  el.style.display = "none";
 
   // Sibling of canvas — avoids DPR transform inheritance.
   const parent = canvas.parentElement ?? document.body;
   parent.appendChild(el);
 
   let _current: TooltipData = { sessions: [], theme: "kitchen" };
-  let _lastXY: { x: number; y: number } | null = null;
   let _tick = 0;
+  let _raf = 0;
 
   const nowS = (): number => Math.floor(Date.now() / 1000);
 
@@ -57,98 +58,55 @@ export function mountTooltip(
     el.innerHTML = renderTooltipHtml(_current, nowS());
   }
 
-  function startTick(): void {
-    if (_tick) return;
-    _tick = window.setInterval(paint, 1000);
-  }
-
-  function stopTick(): void {
-    if (_tick) {
-      clearInterval(_tick);
-      _tick = 0;
-    }
-  }
-
-  function show(cx: number, cy: number): void {
-    paint();
-    positionTooltip(el, cx, cy);
-    el.style.display = "block";
-    startTick();
-  }
-
-  function hide(): void {
-    el.style.display = "none";
-    stopTick();
-  }
-
-  const onEnter = (e: Event): void => {
-    const me = e as MouseEvent;
-    if (overPet(me)) {
-      _lastXY = { x: me.clientX, y: me.clientY };
-      show(me.clientX, me.clientY);
-    }
-  };
-
-  const onMove = (e: Event): void => {
-    if (el.style.display === "none") return;
-    const me = e as MouseEvent;
-    if (overPet(me)) {
-      _lastXY = { x: me.clientX, y: me.clientY };
-      positionTooltip(el, me.clientX, me.clientY);
-    } else {
-      hide();
-    }
-  };
-
-  const onLeave = (): void => hide();
-
-  function overPet(me: MouseEvent): boolean {
+  /** Anchor the panel above the pet (flip below near the top), clamped to the window. */
+  function reposition(): void {
     const rect = canvas.getBoundingClientRect();
     const pos = getPosition();
-    const lx = me.clientX - rect.left;
-    const ly = me.clientY - rect.top;
-    return lx >= pos.x && lx <= pos.x + PET_W && ly >= pos.y && ly <= pos.y + PET_H;
+    const w = el.offsetWidth || 200;
+    const h = el.offsetHeight || 48;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    let left = rect.left + pos.x;
+    let top = rect.top + pos.y - h - GAP;
+    if (top < 0) top = rect.top + pos.y + PET_H + GAP; // flip below the pet
+
+    left = Math.min(Math.max(0, left), Math.max(0, vw - w));
+    top = Math.min(Math.max(0, top), Math.max(0, vh - h));
+
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
   }
 
-  canvas.addEventListener("mouseenter", onEnter);
-  canvas.addEventListener("mousemove", onMove);
-  canvas.addEventListener("mouseleave", onLeave);
+  function frame(): void {
+    reposition();
+    _raf = requestAnimationFrame(frame);
+  }
+
+  // Persistent: paint once, follow the pet each frame, refresh durations every second.
+  paint();
+  _raf = requestAnimationFrame(frame);
+  _tick = window.setInterval(paint, 1000);
 
   return {
     update(data: TooltipData): void {
       _current = data;
-      if (el.style.display !== "none") {
-        paint();
-        if (_lastXY) positionTooltip(el, _lastXY.x, _lastXY.y);
-      }
+      paint();
+      reposition();
     },
 
     destroy(): void {
-      stopTick();
-      canvas.removeEventListener("mouseenter", onEnter);
-      canvas.removeEventListener("mousemove", onMove);
-      canvas.removeEventListener("mouseleave", onLeave);
+      if (_tick) {
+        clearInterval(_tick);
+        _tick = 0;
+      }
+      if (_raf) {
+        cancelAnimationFrame(_raf);
+        _raf = 0;
+      }
       el.remove();
     },
   };
-}
-
-// ── Pure positioning + styles ─────────────────────────────────────────────────
-
-function positionTooltip(el: HTMLDivElement, cx: number, cy: number): void {
-  const vw = window.innerWidth;
-  const tooltipW = 220;
-  const tooltipH = Math.max(40, el.offsetHeight || 60);
-  const offset = 12;
-
-  let left = cx + offset;
-  let top = cy - tooltipH - offset;
-
-  if (left + tooltipW > vw) left = cx - tooltipW - offset;
-  if (top < 0) top = cy + offset;
-
-  el.style.left = `${left}px`;
-  el.style.top = `${top}px`;
 }
 
 function applyBaseStyles(el: HTMLDivElement): void {
@@ -164,6 +122,6 @@ function applyBaseStyles(el: HTMLDivElement): void {
     pointerEvents: "none",
     boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
     fontFamily: "system-ui, sans-serif",
-    maxWidth: "260px",
+    maxWidth: "200px",
   });
 }

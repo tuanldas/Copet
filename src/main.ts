@@ -26,8 +26,9 @@ initTamagotchi({ role: "owner" }).catch((err: unknown) => {
 // agent-bridge only runs in the pet window (owner) — correct single-writer.
 mountPet(canvas)
   .then(({ handle }) => {
-    // Tooltip overlay: hover canvas → show agent/state/project.
-    // getPosition() delegates to RenderLoop.position (live, updated each frame).
+    // Persistent session panel: always visible, anchored above the pet and
+    // following it each frame. getPosition() delegates to RenderLoop.position
+    // (live, updated each frame). agent-bridge feeds it sessions + theme.
     const tooltipHandle = mountTooltip(canvas, () => handle.getPosition());
     return initAgentBridge(handle, tooltipHandle);
   })
