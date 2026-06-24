@@ -31,6 +31,14 @@ export function escHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/**
+ * Panel chỉ hiển thị khi có ≥1 session đang cần chú ý (working/waiting).
+ * Hàm thuần (không DOM) để pet-tooltip.ts toggle display + unit-test trực tiếp.
+ */
+export function hasActiveSessions(sessions: SessionSnapshot[]): boolean {
+  return sessions.some((s) => s.state === "working" || s.state === "waiting");
+}
+
 /** Build the panel inner HTML for the given data + clock (epoch seconds). */
 export function renderTooltipHtml(data: TooltipData, nowSeconds: number): string {
   const sessions = sortSessions(data.sessions);

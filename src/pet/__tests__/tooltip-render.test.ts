@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { renderTooltipHtml } from "../tooltip-render.js";
+import { renderTooltipHtml, hasActiveSessions } from "../tooltip-render.js";
 import type { SessionSnapshot } from "../../types/session-snapshot.js";
 import type { AgentState } from "../../types/agent-event.js";
 
@@ -148,5 +148,23 @@ describe("renderTooltipHtml", () => {
     expect(html).not.toContain("↑");
     // The meta line's unique signature (distinct from the badge's opacity:0.55).
     expect(html).not.toContain("opacity:0.5;font-size");
+  });
+});
+
+describe("hasActiveSessions", () => {
+  it("false khi không có session", () => {
+    expect(hasActiveSessions([])).toBe(false);
+  });
+
+  it("false khi chỉ idle/done/error", () => {
+    expect(hasActiveSessions([snap("idle"), snap("done"), snap("error")])).toBe(false);
+  });
+
+  it("true khi có working", () => {
+    expect(hasActiveSessions([snap("done"), snap("working")])).toBe(true);
+  });
+
+  it("true khi có waiting", () => {
+    expect(hasActiveSessions([snap("waiting")])).toBe(true);
   });
 });

@@ -14,7 +14,7 @@ Code-to-architecture reference: modules → files → key classes/functions. Rep
 | **animation-controller.ts** | 1 | State → animation sequence (idle loop, transition, celebrate burst) |
 | **pet-state-machine.ts** | 1 | Tracks current mood (idle/working/waiting/done/error), animation state, drag offset; @xstate/store |
 | **render-loop.ts** | 1 | 60 FPS Canvas 2D render; RenderLoop class (start/stop, pause on hidden); position tracking |
-| **pet-tooltip.ts** | 1 | Hover overlay showing agent + state + project; mounts separate div |
+| **pet-tooltip.ts** | 1 | Fixed panel pinned above the (stationary) pet, shown only when a session is working/waiting; mounts separate div |
 
 **Tests:** 3 files
 - pet-state-machine.test.ts → state transitions, mood changes

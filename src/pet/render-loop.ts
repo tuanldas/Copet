@@ -3,12 +3,15 @@
  * requestAnimationFrame loop với:
  * - Pause tự động khi document hidden (visibilitychange) → tiết kiệm CPU
  * - Resume khi visible lại
- * - Walk clamp: giữ pet trong window bounds
+ * - Pet đứng yên ở vị trí nghỉ (không roam); walk chỉ cycling frame tại chỗ
  * - FPS throttle: chỉ advance frame khi đủ thời gian theo fps của animation hiện tại
  */
 
 import type { AnimResolution } from "./animation-controller.js";
 import type { PetState } from "./pet-state-machine.js";
+
+/** Lề (px) giữ pet cách đáy cửa sổ ở vị trí nghỉ — chừa khoảng trống phía trên cho panel session. */
+const RESTING_MARGIN = 8;
 
 /** Callback được gọi mỗi frame render */
 export type FrameCallback = (params: FrameParams) => void;
@@ -25,12 +28,6 @@ export interface FrameParams {
 export interface PetPosition {
   x: number;
   y: number;
-}
-
-/** Walk vector: hướng và tốc độ di chuyển */
-interface WalkVector {
-  dx: number;
-  dy: number;
 }
 
 /** Config của render loop */
@@ -54,30 +51,24 @@ export class RenderLoop {
   private currentResolution: AnimResolution;
   private currentState: PetState = "idle";
   private readonly callback: FrameCallback;
-  private readonly config: RenderLoopConfig;
 
   /** Vị trí pet hiện tại (logical px, tính từ góc trên-trái của pet) */
   position: PetPosition;
-
-  /** Walk vector ngẫu nhiên, đổi mỗi khi bắt đầu walk */
-  private walkVector: WalkVector = { dx: 0, dy: 0 };
-  /** Bộ đếm bước walk (tick) trước khi đổi hướng */
-  private walkStepsLeft = 0;
 
   constructor(
     config: RenderLoopConfig,
     initialResolution: AnimResolution,
     callback: FrameCallback
   ) {
-    this.config = config;
     this.currentResolution = initialResolution;
     this.callback = callback;
 
-    // Bắt đầu ở giữa canvas
+    // Vị trí nghỉ: đáy-giữa canvas. Pet đứng yên (không roam), nên panel session
+    // ghim phía trên có tối đa khoảng trống dọc trong cửa sổ nhỏ (220×220).
     const canvas = config.canvas;
     this.position = {
       x: (canvas.clientWidth - config.petWidth) / 2,
-      y: (canvas.clientHeight - config.petHeight) / 2,
+      y: canvas.clientHeight - config.petHeight - RESTING_MARGIN,
     };
   }
 
@@ -141,11 +132,6 @@ export class RenderLoop {
       this.lastFrameTime = timestamp - (elapsed % msPerFrame);
     }
 
-    // Walk logic: update vị trí nếu đang walk
-    if (this.currentState === "walk") {
-      this.stepWalk();
-    }
-
     this.callback({
       frameIndex: this.frameIndex,
       timestamp,
@@ -154,42 +140,4 @@ export class RenderLoop {
 
     this.rafId = requestAnimationFrame(this.tick);
   };
-
-  /**
-   * Di chuyển pet theo walk vector, clamp trong bounds canvas.
-   * Đổi hướng ngẫu nhiên sau mỗi walkStepsLeft bước.
-   */
-  private stepWalk(): void {
-    if (this.walkStepsLeft <= 0) {
-      // Chọn hướng ngẫu nhiên mới (tốc độ 1–2 px/frame)
-      const speed = 1 + Math.random() * 1;
-      const angle = Math.random() * Math.PI * 2;
-      this.walkVector = {
-        dx: Math.cos(angle) * speed,
-        dy: Math.sin(angle) * speed,
-      };
-      // Di chuyển 60–180 frame trước khi đổi hướng (~1–3s @ 60fps)
-      this.walkStepsLeft = 60 + Math.floor(Math.random() * 120);
-    }
-
-    const canvas = this.config.canvas;
-    const maxX = canvas.clientWidth - this.config.petWidth;
-    const maxY = canvas.clientHeight - this.config.petHeight;
-
-    let newX = this.position.x + this.walkVector.dx;
-    let newY = this.position.y + this.walkVector.dy;
-
-    // Bounce lại khi chạm biên
-    if (newX < 0 || newX > maxX) {
-      this.walkVector.dx *= -1;
-      newX = Math.max(0, Math.min(maxX, newX));
-    }
-    if (newY < 0 || newY > maxY) {
-      this.walkVector.dy *= -1;
-      newY = Math.max(0, Math.min(maxY, newY));
-    }
-
-    this.position = { x: newX, y: newY };
-    this.walkStepsLeft--;
-  }
 }

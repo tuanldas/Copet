@@ -1,9 +1,11 @@
 /**
  * pet-tooltip.ts — persistent session panel anchored to the pet.
  *
- * (Was a hover tooltip.) Now ALWAYS visible by default: renders the running
- * sessions list right next to the pet and follows the pet's position each frame.
- * Read-only + pointer-events:none so it never blocks clicks / click-through.
+ * (Was a hover tooltip that followed the pet each frame.) Now pinned at a FIXED
+ * anchor above the (stationary) pet — recomputed only on mount + window resize,
+ * never per-frame — and shown ONLY while there's an active session
+ * (working/waiting), hidden otherwise. Read-only + pointer-events:none so it
+ * never blocks clicks / click-through.
  * Content is built by the pure renderTooltipHtml() helper; data is pushed in by
  * agent-bridge via update() (sessions + current theme).
  *
@@ -13,7 +15,7 @@
  *   panel.destroy(); // on unmount
  */
 
-import { renderTooltipHtml, type TooltipData } from "./tooltip-render.js";
+import { renderTooltipHtml, hasActiveSessions, type TooltipData } from "./tooltip-render.js";
 
 export type { TooltipData };
 
@@ -21,12 +23,10 @@ export type { TooltipData };
 export interface TooltipHandle {
   /** Update panel data (called by agent-bridge on every aggregate / theme change). */
   update(data: TooltipData): void;
-  /** Remove DOM element, the refresh timer, and the position loop. */
+  /** Remove DOM element, the refresh timer, and the resize listener. */
   destroy(): void;
 }
 
-/** Logical pet height (must match pet/index.ts PET_DISPLAY_HEIGHT) — for flip-below. */
-const PET_H = 104;
 /** Gap between the panel and the pet sprite (px). */
 const GAP = 8;
 
@@ -50,7 +50,6 @@ export function mountTooltip(
 
   let _current: TooltipData = { sessions: [], theme: "kitchen" };
   let _tick = 0;
-  let _raf = 0;
 
   const nowS = (): number => Math.floor(Date.now() / 1000);
 
@@ -58,8 +57,12 @@ export function mountTooltip(
     el.innerHTML = renderTooltipHtml(_current, nowS());
   }
 
-  /** Anchor the panel above the pet (flip below near the top), clamped to the window. */
-  function reposition(): void {
+  /**
+   * Ghim panel ở vị trí CỐ ĐỊNH phía trên pet, clamp trong cửa sổ.
+   * Pet đứng yên nên getPosition() là hằng → chỉ cần tính lúc mount + on resize,
+   * KHÔNG chạy mỗi frame (đây là nguyên nhân panel cũ nhảy theo pet).
+   */
+  function positionPanel(): void {
     const rect = canvas.getBoundingClientRect();
     const pos = getPosition();
     const w = el.offsetWidth || 200;
@@ -67,32 +70,40 @@ export function mountTooltip(
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    let left = rect.left + pos.x;
-    let top = rect.top + pos.y - h - GAP;
-    if (top < 0) top = rect.top + pos.y + PET_H + GAP; // flip below the pet
-
-    left = Math.min(Math.max(0, left), Math.max(0, vw - w));
-    top = Math.min(Math.max(0, top), Math.max(0, vh - h));
+    // Neo phía trên pet; clamp top ≥ 0 (cửa sổ thấp → ngồi sát mép trên thay vì lật xuống).
+    const left = Math.min(Math.max(0, rect.left + pos.x), Math.max(0, vw - w));
+    const top = Math.min(Math.max(0, rect.top + pos.y - h - GAP), Math.max(0, vh - h));
 
     el.style.left = `${left}px`;
     el.style.top = `${top}px`;
   }
 
-  function frame(): void {
-    reposition();
-    _raf = requestAnimationFrame(frame);
+  /** Hiện panel chỉ khi có session working/waiting; ẩn hẳn nếu không. */
+  function applyVisibility(): void {
+    const show = hasActiveSessions(_current.sessions);
+    el.style.display = show ? "block" : "none";
+    if (show) {
+      paint();
+      positionPanel();
+    }
   }
 
-  // Persistent: paint once, follow the pet each frame, refresh durations every second.
-  paint();
-  _raf = requestAnimationFrame(frame);
-  _tick = window.setInterval(paint, 1000);
+  // Pet đứng yên → không follow mỗi frame. Chỉ tính lại anchor khi cửa sổ resize.
+  const onResize = (): void => {
+    if (el.style.display !== "none") positionPanel();
+  };
+  window.addEventListener("resize", onResize);
+
+  // Ẩn cho tới khi có session active; refresh duration mỗi giây khi đang hiện.
+  applyVisibility();
+  _tick = window.setInterval(() => {
+    if (el.style.display !== "none") paint();
+  }, 1000);
 
   return {
     update(data: TooltipData): void {
       _current = data;
-      paint();
-      reposition();
+      applyVisibility();
     },
 
     destroy(): void {
@@ -100,10 +111,7 @@ export function mountTooltip(
         clearInterval(_tick);
         _tick = 0;
       }
-      if (_raf) {
-        cancelAnimationFrame(_raf);
-        _raf = 0;
-      }
+      window.removeEventListener("resize", onResize);
       el.remove();
     },
   };
