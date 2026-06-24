@@ -2,7 +2,7 @@
  * SessionList.tsx — presentational list of running agent sessions.
  *
  * Pure props (sessions / theme / now accessors) so HUD, tray popover, and the
- * pet panel reuse it. Each row is 2 lines: agent badge + name + running
+ * pet panel reuse it. Each row is 2 lines: agent icon + name + running
  * duration, then state label + active tool (when working) + last activity.
  */
 
@@ -12,7 +12,7 @@ import type { SessionSnapshot, LabelTheme } from "../../types/session-snapshot.j
 import type { AgentState } from "../../types/agent-event.js";
 import { getStateLabel } from "../../agent-bridge/state-labels.js";
 import { formatDuration } from "./session-duration.js";
-import { agentBadge } from "./agent-badge.js";
+import { agentIcon } from "./agent-icon.js";
 import { sortSessions, isFaded, displayName } from "./session-list-model.js";
 import { formatTokens, shortModel } from "./session-format.js";
 
@@ -74,8 +74,12 @@ const SessionList: Component<SessionListProps> = (props) => {
                 />
                 <div class="session-main">
                   <div class="session-line1">
-                    <Show when={agentBadge(s.agent)}>
-                      <span class="session-badge">{agentBadge(s.agent)}</span>
+                    <Show when={agentIcon(s.agent)}>
+                      <span
+                        class="session-badge"
+                        data-agent={s.agent ?? undefined}
+                        innerHTML={agentIcon(s.agent)}
+                      />
                     </Show>
                     <Show when={s.model}>
                       <span class="session-model">{shortModel(s.model!)}</span>

@@ -52,6 +52,41 @@ describe("SessionTracker — single session", () => {
   });
 });
 
+// ── remove (SessionEnd / `ended` eviction) ────────────────────────────────────
+
+describe("SessionTracker — remove", () => {
+  let tracker: SessionTracker;
+
+  beforeEach(() => {
+    tracker = new SessionTracker();
+  });
+
+  it("removes a tracked session and returns true", () => {
+    tracker.update("s1", "done", NOW_S, "claude-code", null);
+    expect(tracker.remove("s1")).toBe(true);
+    expect(tracker.size).toBe(0);
+    expect(tracker.aggregate().effectiveState).toBe("idle");
+  });
+
+  it("returns false for an unknown session and leaves others intact", () => {
+    tracker.update("s1", "working", NOW_S, "claude-code", null);
+    expect(tracker.remove("does-not-exist")).toBe(false);
+    expect(tracker.size).toBe(1);
+  });
+
+  it("evicting a cleared session leaves only the freshly-started one", () => {
+    // Simulates /clear: old session ends, a new session_id starts.
+    tracker.update("old", "done", NOW_S, "claude-code", "proj");
+    tracker.update("new", "working", NOW_S + 1, "claude-code", "proj");
+    expect(tracker.size).toBe(2);
+    tracker.remove("old"); // SessionEnd → ended → remove
+    expect(tracker.size).toBe(1);
+    expect(tracker.get("new")).toBeDefined();
+    expect(tracker.get("old")).toBeUndefined();
+    expect(tracker.aggregate().effectiveState).toBe("working");
+  });
+});
+
 // ── Multi-session priority ────────────────────────────────────────────────────
 
 describe("SessionTracker — multi-session priority (working > waiting > error > done > idle)", () => {
@@ -153,6 +188,65 @@ describe("SessionTracker — expireStale", () => {
 
   it("expireStale returns false when nothing removed", () => {
     expect(tracker.expireStale(NOW_MS, 300_000)).toBe(false);
+  });
+});
+
+// ── Expire stale: terminal (done/error) fast-timeout ──────────────────────────
+
+describe("SessionTracker — expireStale terminal fast-timeout", () => {
+  let tracker: SessionTracker;
+  const ACTIVE = 300_000; // 5 min for working/waiting/idle
+  const TERMINAL = 45_000; // 45 s for done/error
+
+  beforeEach(() => {
+    tracker = new SessionTracker();
+  });
+
+  it("done session past the terminal timeout (but within active) is removed", () => {
+    tracker.update("d", "done", NOW_S - 60, "claude-code", null); // 60s: >45s, <300s
+    expect(tracker.expireStale(NOW_MS, ACTIVE, TERMINAL)).toBe(true);
+    expect(tracker.size).toBe(0);
+  });
+
+  it("error session past the terminal timeout is removed", () => {
+    tracker.update("e", "error", NOW_S - 60, "claude-code", null);
+    tracker.expireStale(NOW_MS, ACTIVE, TERMINAL);
+    expect(tracker.get("e")).toBeUndefined();
+  });
+
+  it("working session of the same age is KEPT (uses active timeout)", () => {
+    tracker.update("w", "working", NOW_S - 60, "claude-code", null);
+    expect(tracker.expireStale(NOW_MS, ACTIVE, TERMINAL)).toBe(false);
+    expect(tracker.get("w")).toBeDefined();
+  });
+
+  it("waiting session of the same age is KEPT", () => {
+    tracker.update("p", "waiting", NOW_S - 60, "claude-code", null);
+    tracker.expireStale(NOW_MS, ACTIVE, TERMINAL);
+    expect(tracker.get("p")).toBeDefined();
+  });
+
+  it("fresh done session (within terminal timeout) is kept", () => {
+    tracker.update("d", "done", NOW_S - 10, "claude-code", null); // 10s < 45s
+    expect(tracker.expireStale(NOW_MS, ACTIVE, TERMINAL)).toBe(false);
+    expect(tracker.get("d")).toBeDefined();
+  });
+
+  it("mixed: stale done removed, equally-old working kept", () => {
+    tracker.update("d", "done", NOW_S - 60, "claude-code", null);
+    tracker.update("w", "working", NOW_S - 60, "claude-code", null);
+    tracker.expireStale(NOW_MS, ACTIVE, TERMINAL);
+    expect(tracker.size).toBe(1);
+    expect(tracker.get("w")).toBeDefined();
+    expect(tracker.get("d")).toBeUndefined();
+  });
+
+  it("single-timeout call expires all states uniformly (backward compat)", () => {
+    tracker.update("d", "done", NOW_S - 60, "claude-code", null);
+    tracker.update("w", "working", NOW_S - 60, "claude-code", null);
+    // Only 2 args → terminal defaults to active; 60s < 300s → nothing removed.
+    expect(tracker.expireStale(NOW_MS, ACTIVE)).toBe(false);
+    expect(tracker.size).toBe(2);
   });
 });
 

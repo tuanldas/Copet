@@ -6,6 +6,14 @@
  * never per-frame — and shown ONLY while there's an active session
  * (working/waiting), hidden otherwise. Read-only + pointer-events:none so it
  * never blocks clicks / click-through.
+ *
+ * Style split: the panel SHELL (white bg, fixed 400px, radius/shadow/font) is set
+ * inline on the element; everything inline can't express — the down-caret
+ * (`::after`) and the per-row `.cpt-*` classes (state colours, fonts) — lives in a
+ * single SCOPED stylesheet injected once into <head>. We deliberately do NOT
+ * import design-tokens.css: its global `body{background}` + `*{}` reset would
+ * break the transparent overlay window. Only `#pet-tooltip` / `.cpt-*` are scoped.
+ *
  * Content is built by the pure renderTooltipHtml() helper; data is pushed in by
  * agent-bridge via update() (sessions + current theme).
  *
@@ -30,6 +38,53 @@ export interface TooltipHandle {
 /** Gap between the panel and the pet sprite (px). */
 const GAP = 8;
 
+/** Fixed panel width (px) — "gấp đôi" the old 200px max. */
+const PANEL_WIDTH = 400;
+
+/** id of the single injected stylesheet (dedupe guard across remounts). */
+const STYLE_ID = "cpt-tooltip-style";
+
+/**
+ * Scoped panel stylesheet. `@import` MUST be first (CSS spec) or the fonts are
+ * ignored. Contains ONLY `#pet-tooltip` caret + `.cpt-*` rules — never `html`,
+ * `body`, or `*` (those would leak into the transparent overlay window).
+ */
+const PANEL_CSS = `@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+#pet-tooltip::after{content:"";position:absolute;left:50%;bottom:-8px;transform:translateX(-50%) rotate(45deg);width:16px;height:16px;background:#ffffff;border-right:1px solid rgba(15,23,42,0.08);border-bottom:1px solid rgba(15,23,42,0.08);}
+.cpt-empty{padding:10px 14px;color:#64748b;}
+.cpt-row{padding:12px 14px;}
+.cpt-row + .cpt-row{border-top:1px solid rgba(15,23,42,0.08);}
+.cpt-head{display:flex;align-items:center;gap:8px;}
+.cpt-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;}
+.cpt-dot--working{background:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.18);}
+.cpt-dot--waiting{background:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,0.18);}
+.cpt-dot--done{background:#22c55e;}
+.cpt-dot--idle{background:#94a3b8;}
+.cpt-dot--error{background:#ef4444;}
+.cpt-badge{flex:0 0 auto;display:inline-flex;width:16px;height:16px;}
+.cpt-badge svg{width:16px;height:16px;display:block;}
+.cpt-name{font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:500;font-size:13.5px;color:#1e1e2e;flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cpt-state{flex:0 0 auto;font-size:12px;font-weight:700;white-space:nowrap;}
+.cpt-timer{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:#64748b;flex:0 0 auto;margin-left:auto;font-variant-numeric:tabular-nums;}
+.cpt-state--working{color:#3b82f6;}
+.cpt-state--waiting{color:#f59e0b;}
+.cpt-state--done{color:#22c55e;}
+.cpt-state--idle{color:#94a3b8;}
+.cpt-state--error{color:#ef4444;}
+.cpt-cmd{margin-top:5px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;color:#1e1e2e;line-height:1.5;overflow-wrap:anywhere;}
+.cpt-cmd--ask{font-family:'Nunito',system-ui,sans-serif;font-size:12.5px;color:#1e1e2e;}
+.cpt-tool{color:#3b82f6;font-weight:500;}
+.cpt-more{padding:6px 14px;font-size:11px;color:#94a3b8;}`;
+
+/** Inject the scoped stylesheet once (shared by every panel instance). */
+function injectStyleOnce(): void {
+  if (document.getElementById(STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = STYLE_ID;
+  style.textContent = PANEL_CSS;
+  document.head.appendChild(style);
+}
+
 /**
  * Mount the persistent session panel for the pet canvas.
  *
@@ -40,6 +95,8 @@ export function mountTooltip(
   canvas: HTMLCanvasElement,
   getPosition: () => { x: number; y: number },
 ): TooltipHandle {
+  injectStyleOnce();
+
   const el = document.createElement("div");
   el.id = "pet-tooltip";
   applyBaseStyles(el);
@@ -65,13 +122,15 @@ export function mountTooltip(
   function positionPanel(): void {
     const rect = canvas.getBoundingClientRect();
     const pos = getPosition();
-    const w = el.offsetWidth || 200;
+    const w = el.offsetWidth || PANEL_WIDTH;
     const h = el.offsetHeight || 48;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
+    // Pet nghỉ ở GIỮA cửa sổ (render-loop) → căn panel + caret vào giữa cửa sổ để
+    // trỏ đúng đỉnh pet dù panel rộng 400px. Clamp trong viewport.
+    const left = Math.max(0, Math.min((vw - w) / 2, vw - w));
     // Neo phía trên pet; clamp top ≥ 0 (cửa sổ thấp → ngồi sát mép trên thay vì lật xuống).
-    const left = Math.min(Math.max(0, rect.left + pos.x), Math.max(0, vw - w));
     const top = Math.min(Math.max(0, rect.top + pos.y - h - GAP), Math.max(0, vh - h));
 
     el.style.left = `${left}px`;
@@ -117,19 +176,25 @@ export function mountTooltip(
   };
 }
 
+/**
+ * Inline panel SHELL — kept inline (not in the stylesheet) so positionPanel reads
+ * a reliable width and unit tests can assert via `el.style.*`. Visual extras
+ * (caret, row colours, fonts) come from the scoped #pet-tooltip / .cpt-* sheet.
+ */
 function applyBaseStyles(el: HTMLDivElement): void {
   Object.assign(el.style, {
     position: "fixed",
     zIndex: "9999",
-    background: "rgba(15,23,42,0.92)",
-    color: "#f1f5f9",
-    borderRadius: "6px",
-    padding: "6px 10px",
-    fontSize: "12px",
-    lineHeight: "1.5",
     pointerEvents: "none",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
-    fontFamily: "system-ui, sans-serif",
-    maxWidth: "200px",
+    width: `${PANEL_WIDTH}px`,
+    background: "#ffffff",
+    color: "#1e1e2e",
+    borderRadius: "12px",
+    border: "1px solid rgba(15,23,42,0.08)",
+    // Softer + smaller blur so it fully fades inside the window margin (≈40px each
+    // side); a 30px/0.45 shadow overran the edge and got clipped into a hard line.
+    boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+    fontFamily: "'Nunito', system-ui, sans-serif",
+    fontSize: "12px",
   });
 }

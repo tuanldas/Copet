@@ -78,7 +78,8 @@ Claude Code passes a JSON payload on stdin for every hook invocation.
 |---|---|
 | `PreToolUse` / `UserPromptSubmit` / `SubagentStart` | `working` |
 | `Notification` where `notification_type` is `idle_prompt` or `permission_prompt` | `waiting` |
-| `Stop` / `SessionEnd` | `done` |
+| `Stop` | `done` (turn finished; session stays alive) |
+| `SessionEnd` | `done` **+ `ended` flag** — the pet window removes the session from the tracker instead of leaving a stale "done" entry. Without this, a `/clear` (which starts a new `session_id`) would show the cleared session alongside the new one until the 5-min expiry. |
 
 All other hook events are silently ignored (hook always exits 0).
 

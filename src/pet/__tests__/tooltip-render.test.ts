@@ -1,6 +1,6 @@
 /**
- * tooltip-render.test.ts — renderTooltipHtml row count, "+N more", escaping, theme.
- * Pure logic — no DOM/Tauri deps.
+ * tooltip-render.test.ts — renderTooltipHtml row markup (cpt-* classes), escaping,
+ * theme, timer, command line, model/tokens meta. Pure logic — no DOM/Tauri deps.
  */
 
 import { describe, it, expect } from "vitest";
@@ -53,45 +53,67 @@ describe("renderTooltipHtml", () => {
     expect(g).toContain("Growing");
   });
 
-  it("formats duration from since", () => {
+  it("formats the prompt-runtime timer from since", () => {
     const html = renderTooltipHtml(
       { sessions: [snap("working", { project: "p", since: NOW - 19 * 60 })], theme: "kitchen" },
       NOW,
     );
     expect(html).toContain("19m");
+    expect(html).toContain("cpt-timer");
   });
 
-  it("shows the agent badge", () => {
+  it("shows the agent icon badge (svg, not text)", () => {
     const html = renderTooltipHtml({ sessions: [snap("working", { project: "p" })], theme: "kitchen" }, NOW);
-    expect(html).toContain("Claude");
+    expect(html).toContain("cpt-badge");
+    expect(html).toContain("<svg");
+    expect(html).toContain('data-agent="claude-code"');
+    expect(html).not.toContain(">Claude<"); // no longer a text badge
   });
 
-  it("shows the active tool only when working", () => {
+  it("marks the status dot with the session state", () => {
+    const working = renderTooltipHtml({ sessions: [snap("working", { project: "p" })], theme: "kitchen" }, NOW);
+    expect(working).toContain("cpt-dot--working");
+    const waiting = renderTooltipHtml({ sessions: [snap("waiting", { project: "p" })], theme: "kitchen" }, NOW);
+    expect(waiting).toContain("cpt-dot--waiting");
+  });
+
+  it("shows the active tool on its own command line only when working", () => {
     const working = renderTooltipHtml({ sessions: [snap("working", { project: "p", tool: "Bash" })], theme: "kitchen" }, NOW);
     expect(working).toContain("Bash");
+    expect(working).toContain("cpt-cmd");
     const done = renderTooltipHtml({ sessions: [snap("done", { project: "p", tool: "Bash" })], theme: "kitchen" }, NOW);
     expect(done).not.toContain("Bash");
   });
 
-  it("shows the enriched tool input as 'Tool: input' when working", () => {
+  it("shows the enriched tool input next to the tool when working", () => {
     const html = renderTooltipHtml(
       { sessions: [snap("working", { project: "p", tool: "Bash", toolInput: "pnpm test" })], theme: "kitchen" },
       NOW,
     );
-    expect(html).toContain("Bash: pnpm test");
+    expect(html).toContain("pnpm test");
+    expect(html).toContain("cpt-tool");
   });
 
-  it("shows the notification message only when waiting", () => {
+  it("shows the notification message in an ask command line only when waiting", () => {
     const waiting = renderTooltipHtml(
       { sessions: [snap("waiting", { project: "p", message: "needs permission for Bash" })], theme: "kitchen" },
       NOW,
     );
     expect(waiting).toContain("needs permission for Bash");
+    expect(waiting).toContain("cpt-cmd--ask");
     const working = renderTooltipHtml(
       { sessions: [snap("working", { project: "p", message: "needs permission for Bash" })], theme: "kitchen" },
       NOW,
     );
     expect(working).not.toContain("needs permission for Bash");
+  });
+
+  it("drops the last-activity 'X trước' line", () => {
+    const html = renderTooltipHtml(
+      { sessions: [snap("working", { project: "p", ts: NOW - 30 })], theme: "kitchen" },
+      NOW,
+    );
+    expect(html).not.toContain("trước");
   });
 
   it("puts the full cwd + prompt into the row title (hover) and escapes them", () => {
@@ -116,7 +138,7 @@ describe("renderTooltipHtml", () => {
     expect(html).not.toContain("<script>");
   });
 
-  it("shows model (claude- prefix stripped) and compact tokens when present", () => {
+  it("never renders model or tokens, even when present (meta removed)", () => {
     const html = renderTooltipHtml(
       {
         sessions: [snap("working", { project: "p", model: "claude-opus-4-8", tokensIn: 248000, tokensOut: 1219 })],
@@ -124,10 +146,10 @@ describe("renderTooltipHtml", () => {
       },
       NOW,
     );
-    expect(html).toContain("opus-4-8");
-    expect(html).not.toContain("claude-opus-4-8");
-    expect(html).toContain("248k");
-    expect(html).toContain("1.2k");
+    expect(html).not.toContain("opus");
+    expect(html).not.toContain("248k");
+    expect(html).not.toContain("↑");
+    expect(html).not.toContain("cpt-meta");
   });
 
   it("puts summary + last message into the hover title and escapes them", () => {
@@ -143,12 +165,6 @@ describe("renderTooltipHtml", () => {
     expect(html).not.toContain("<b>mode</b>");
   });
 
-  it("omits the meta line entirely when no model/tokens (opt-in off)", () => {
-    const html = renderTooltipHtml({ sessions: [snap("working", { project: "p" })], theme: "kitchen" }, NOW);
-    expect(html).not.toContain("↑");
-    // The meta line's unique signature (distinct from the badge's opacity:0.55).
-    expect(html).not.toContain("opacity:0.5;font-size");
-  });
 });
 
 describe("hasActiveSessions", () => {

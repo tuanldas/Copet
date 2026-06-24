@@ -67,6 +67,13 @@ export interface AggregateResult {
 /** Priority order — lower index = higher priority. */
 export const PRIORITY: AgentState[] = ["working", "waiting", "error", "done", "idle"];
 
+/**
+ * Terminal states — a session in one of these has finished its turn and is no
+ * longer doing work. expireStale() can clear these on a shorter timeout so
+ * completed "done"/"error" sessions don't pile up in the list.
+ */
+const TERMINAL_STATES: ReadonlySet<AgentState> = new Set<AgentState>(["done", "error"]);
+
 export function statePriority(state: AgentState): number {
   const idx = PRIORITY.indexOf(state);
   return idx === -1 ? PRIORITY.length : idx;
@@ -203,22 +210,39 @@ export class SessionTracker {
   }
 
   /**
-   * Remove sessions that have not emitted an event within timeoutMs.
+   * Remove sessions that have not emitted an event within their timeout.
+   * Terminal sessions (done/error) use `terminalTimeoutMs` so finished turns
+   * clear sooner than active ones; all other states use `timeoutMs`. Pass only
+   * `timeoutMs` to expire every state uniformly (terminalTimeoutMs defaults to
+   * it, preserving the original single-timeout behaviour).
    * Uses nowMs (epoch ms) and converts session.ts (epoch seconds) for comparison.
    * @param nowMs - current time in milliseconds (e.g. Date.now())
-   * @param timeoutMs - session expiry window in ms (default 5 minutes)
+   * @param timeoutMs - expiry window for active (working/waiting/idle) sessions
+   * @param terminalTimeoutMs - shorter expiry for done/error sessions
    * @returns true if any sessions were removed (caller should re-aggregate)
    */
-  expireStale(nowMs: number, timeoutMs = 300_000): boolean {
+  expireStale(nowMs: number, timeoutMs = 300_000, terminalTimeoutMs = timeoutMs): boolean {
     let removed = false;
     for (const [id, entry] of this.sessions) {
       const ageMs = nowMs - entry.ts * 1000;
-      if (ageMs > timeoutMs) {
+      const limit = TERMINAL_STATES.has(entry.state) ? terminalTimeoutMs : timeoutMs;
+      if (ageMs > limit) {
         this.sessions.delete(id);
         removed = true;
       }
     }
     return removed;
+  }
+
+  /**
+   * Remove a session outright. Used when an agent signals the session has
+   * terminated (Claude `SessionEnd` → `ended` event), so a `/clear` evicts the
+   * old session immediately instead of letting it linger as a stale "done"
+   * entry until expireStale fires.
+   * @returns true if the session existed (caller should re-aggregate)
+   */
+  remove(sessionId: string): boolean {
+    return this.sessions.delete(sessionId);
   }
 
   /** How many sessions are currently tracked (for testing). */

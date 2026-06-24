@@ -64,6 +64,14 @@ export interface AgentEvent {
   /** Output tokens of the last assistant turn. */
   tokens_out: number | null;
 
+  /**
+   * Session-termination signal (Claude SessionEnd — any reason: /clear, logout,
+   * exit). When true, the pet window REMOVES this session from the tracker
+   * instead of rendering its state, so /clear doesn't leave a stale "done"
+   * session behind. Always present from the daemon (false for normal events).
+   */
+  ended: boolean;
+
   /** Unix timestamp in seconds. */
   ts: number;
 }

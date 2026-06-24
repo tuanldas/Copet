@@ -135,7 +135,7 @@ Non-Claude agents populate only core + enrichment fields; transcript fields rema
 #### init_plugins()
 - `tauri-plugin-store` — JSON persistence (copet-pet.json, copet-economy.json)
 - `tauri-plugin-positioner` — remember pet position per monitor
-- `tauri-plugin-window-state` — window size/pos recovery
+- `tauri-plugin-window-state` — window POSITION recovery (SIZE excluded; all windows fixed-size)
 - `tauri-plugin-global-shortcut` — toggle pet hotkey
 - `tauri-plugin-autostart` — launch on boot
 - `tauri-plugin-notification` — stat alerts (optional)
@@ -299,7 +299,7 @@ Tray icon color updated
 |------|---------|-------|------------|
 | copet-pet.json | Pet stats, XP, evolution stage, cosmetics | Pet window | Write every 60s + on change |
 | copet-economy.json | Token balance, owned items, equipped cosmetic | Pet window | Write on purchase/stat restore |
-| window-state.json | HUD/Settings/Shop position/size (plugin managed) | Tauri plugin-store | Auto-persist per window |
+| window-state.json | Window POSITION per monitor (SIZE excluded — all windows fixed-size) | Tauri plugin-store | Auto-persist per window |
 | ~/.copet/hook-config.json | Hook configuration: `{"read_transcript": bool}` | Tauri app (set_transcript_optin command) | Write on Settings toggle; read by copet-hook per event |
 
 **Single Writer:** Pet window is the exclusive writer. HUD/Settings/Shop read copet-pet.json, copet-economy.json every poll (1s) without writing. Tauri app manages hook-config.json (writes via command); copet-hook reads it on each event to respect opt-in state.
@@ -347,7 +347,7 @@ Example: 3 agents running (Claude working, Codex waiting, Gemini done) → all 3
 **macOS Private API:** `acceptFirstMouse` + `ActivationPolicy::Accessory` hide dock icon (applied to pet + sessions).  
 **Tray Popover Positioning (macOS):** Runtime-built sessions window uses native AppKit (`NSEvent::mouseLocation` + `NSScreen::visibleFrame`) instead of Tauri's unreliable `cursor_position()`/`set_position` on mixed-DPI displays (Tauri #7890, #7139). Window positioned in Cocoa points (the only coordinate space consistent across monitors).  
 **Fullscreen Support (macOS):** Sessions + pet windows apply `set_overlay_collection_behavior` with `FullScreenAuxiliary` so they float over other apps' native-fullscreen Spaces.  
-**Hidden at Launch:** Window-state plugin excludes `VISIBLE` flag (`StateFlags::all() & !VISIBLE`) so toggled windows stay hidden until explicitly opened.
+**Hidden at Launch + fixed size:** Window-state plugin excludes `VISIBLE` (toggled windows stay hidden until opened) **and `SIZE`** (a stale saved size must never override the code-defined `inner_size` — e.g. the pet window widened to fit the 400px session panel): `StateFlags::all() & !VISIBLE & !SIZE`. Only POSITION persists.
 
 ## Sequence Diagram: Start → First Agent Event
 
@@ -411,5 +411,5 @@ Stats persist to store
 
 ---
 
-**Last Updated:** 2026-06-23  
+**Last Updated:** 2026-06-24  
 **Maintainer:** docs-manager

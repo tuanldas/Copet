@@ -14,7 +14,7 @@ Code-to-architecture reference: modules → files → key classes/functions. Rep
 | **animation-controller.ts** | 1 | State → animation sequence (idle loop, transition, celebrate burst) |
 | **pet-state-machine.ts** | 1 | Tracks current mood (idle/working/waiting/done/error), animation state, drag offset; @xstate/store |
 | **render-loop.ts** | 1 | 60 FPS Canvas 2D render; RenderLoop class (start/stop, pause on hidden); position tracking |
-| **pet-tooltip.ts** | 1 | Fixed panel pinned above the (stationary) pet, shown only when a session is working/waiting; mounts separate div |
+| **pet-tooltip.ts** | 1 | White 400px session card pinned above the (stationary) pet, shown only when working/waiting; inline shell + injects ONE scoped `#pet-tooltip`/`.cpt-*` stylesheet (never imports design-tokens.css globally → keeps overlay transparent); centred on the window-centred pet |
 
 **Tests:** 3 files
 - pet-state-machine.test.ts → state transitions, mood changes
@@ -204,7 +204,8 @@ export function mapStateToReaction(state: AgentState): {glow: string, duration: 
 | label-theme-store.ts | SolidJS signal for current label theme; subscribe to label-theme-changed event |
 | session-list-model.ts | Compute session rows: sort by priority, apply theme labels, format for render |
 | use-sessions.ts | SolidJS hook: subscribe to sessions-snapshot event; expose sessions reactively |
-| SessionList.tsx | Shared component; render session list (3+ surfaces: HUD, popover, tooltip); show model badge + tokens + condensed tool |
+| **agent-icon.ts** | NEW—agentIcon(agent): inline SVG brand mark per agent (Anthropic/OpenAI/Gemini + terminal glyph for wrapper); "" when null. Replaced the text-only agent-badge.ts |
+| SessionList.tsx | Shared component; render session list (HUD + tray popover); agent brand icon + model + tokens + condensed tool |
 | session-list.css | Session row styling (state dot, theme label, duration, project, tool, model, tokens; dimmed done/idle) |
 | tauri-commands.ts | Wrappers for all tauri::invoke commands (type-safe); NEW `setTranscriptOptin`, `quitApp` |
 | design-tokens.css | Color palette, spacing, typography vars |
@@ -220,7 +221,7 @@ export function mapStateToReaction(state: AgentState): {glow: string, duration: 
 
 | File | Purpose |
 |------|---------|
-| tooltip-render.ts | Build HTML for tooltip: dominant session info + sorted session list (max 5 rows, +N more); uses theme labels |
+| tooltip-render.ts | Build panel HTML (`cpt-*` classes, pure/testable): per session = status dot + agent brand icon + name + state label (on the name line) + prompt-runtime timer, then a command line; sorted, max 5 rows + "+N more"; theme labels; escHtml on all agent strings |
 
 ### Entry Point
 
@@ -549,6 +550,6 @@ cargo clippy --workspace
 
 ---
 
-**Last Updated:** 2026-06-23  
+**Last Updated:** 2026-06-24  
 **Maintainer:** docs-manager  
 **Repomix Baseline:** 135+ files (post-sessions feature); ~155k tokens

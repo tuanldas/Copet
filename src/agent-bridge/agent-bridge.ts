@@ -30,11 +30,22 @@ import { applyAgentXp } from "../tamagotchi/index.js";
 import type { PetHandle } from "../pet/index.js";
 import type { TooltipHandle } from "../pet/pet-tooltip.js";
 
-/** Expire sessions after 5 minutes of inactivity. */
+/** Expire active (working/waiting) sessions after 5 minutes of inactivity. */
 const SESSION_TIMEOUT_MS = 300_000;
 
-/** Interval between stale-session checks (ms). */
-const EXPIRE_INTERVAL_MS = 30_000;
+/**
+ * Expire finished (done/error) sessions much sooner so completed turns don't
+ * pile up as lingering "Full"/"Burnt" rows. Combined with EXPIRE_INTERVAL_MS,
+ * a finished session clears ~45–60 s after its last event.
+ */
+const DONE_SESSION_TIMEOUT_MS = 45_000;
+
+/**
+ * Interval between stale-session checks (ms). Kept below DONE_SESSION_TIMEOUT_MS
+ * so finished sessions clear close to their 45 s window rather than lagging a
+ * full check cycle behind.
+ */
+const EXPIRE_INTERVAL_MS = 15_000;
 
 /**
  * Dedup set for done XP: keys are `${session_id}:${ts}`.
@@ -102,7 +113,7 @@ export async function initAgentBridge(
   // ── 2. Expire stale sessions on interval ────────────────────────────────────
   _expireInterval = window.setInterval(() => {
     const nowMs = Date.now();
-    const removed = _tracker.expireStale(nowMs, SESSION_TIMEOUT_MS);
+    const removed = _tracker.expireStale(nowMs, SESSION_TIMEOUT_MS, DONE_SESSION_TIMEOUT_MS);
     if (removed) {
       _reAggregate(petHandle, tooltipHandle);
       _broadcast();
@@ -146,7 +157,20 @@ function _handleEvent(
     last_message,
     tokens_in,
     tokens_out,
+    ended,
   } = event;
+
+  // Session terminated (Claude SessionEnd, e.g. after /clear): remove it outright
+  // instead of updating. Otherwise the cleared session lingers as a stale "done"
+  // entry until the 5-min expiry, overlapping the freshly-started session.
+  // No XP here — the turn's preceding Stop event already awarded it.
+  if (ended) {
+    if (_tracker.remove(session_id)) {
+      _reAggregate(petHandle, tooltipHandle);
+      _broadcast();
+    }
+    return;
+  }
 
   // Update session tracker (enrichment fields bundled as the trailing info arg).
   _tracker.update(session_id, state, ts, agent, project, tool, {

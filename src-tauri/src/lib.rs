@@ -97,11 +97,16 @@ fn init_plugins(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     // Shop / sessions popover) must stay hidden at launch, never reappear just
     // because they were open when the app last quit. The pet shows regardless
     // (its builder default is visible).
+    // Exclude SIZE: every window is resizable(false) with a code-defined
+    // inner_size; persisting size would restore a stale size and silently
+    // override later code changes (e.g. widening the pet window to fit the
+    // 400px session panel) — only position should be remembered.
     app.handle().plugin(
         tauri_plugin_window_state::Builder::new()
             .with_state_flags(
                 tauri_plugin_window_state::StateFlags::all()
-                    & !tauri_plugin_window_state::StateFlags::VISIBLE,
+                    & !tauri_plugin_window_state::StateFlags::VISIBLE
+                    & !tauri_plugin_window_state::StateFlags::SIZE,
             )
             .build(),
     )?;
@@ -228,7 +233,11 @@ fn build_pet_window(app: &mut App) -> Result<WebviewWindow, Box<dyn std::error::
 
     let pet = WebviewWindowBuilder::new(app, "pet", WebviewUrl::App("index.html".into()))
         .title("Copet")
-        .inner_size(220.0, 220.0)
+        // Wide enough for the 400px session panel PLUS room for its drop-shadow to
+        // fade out — otherwise the window edge clips the shadow into a hard fake
+        // line (overflow:hidden). Centred panel → ~40px margin each side > blur.
+        // Tall enough for a 1-2 session panel above the window-centred pet.
+        .inner_size(480.0, 360.0)
         .transparent(true)
         .decorations(false)
         .always_on_top(true)
