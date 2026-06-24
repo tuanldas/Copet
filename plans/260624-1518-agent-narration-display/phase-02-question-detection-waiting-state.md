@@ -1,8 +1,8 @@
 ---
 phase: 2
-title: "Question detection waiting state"
-status: pending
-effort: "M (Rust pure module + orchestrator wire + FE line)"
+title: Question detection waiting state
+status: completed
+effort: M (Rust pure module + orchestrator wire + FE line)
 ---
 
 # Phase 2: Question detection waiting state

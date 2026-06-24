@@ -53,8 +53,12 @@ function commandLine(s: SessionSnapshot): string {
       ? `<div class="cpt-cmd">${toolName} · ${escHtml(s.toolInput)}</div>`
       : `<div class="cpt-cmd">${toolName}</div>`;
   }
-  if (s.state === "waiting" && s.message) {
-    return `<div class="cpt-cmd cpt-cmd--ask">${escHtml(s.message)}</div>`;
+  if (s.state === "waiting") {
+    // Permission/notification text wins; else the assistant's own question
+    // (lastMessage) — the narration that flipped this session to "waiting"
+    // via question-detection (Codex inline / Claude transcript).
+    const ask = s.message ?? s.lastMessage;
+    if (ask) return `<div class="cpt-cmd cpt-cmd--ask">${escHtml(ask)}</div>`;
   }
   return "";
 }
