@@ -158,6 +158,7 @@ Non-Claude agents populate only core + enrichment fields; transcript fields rema
 - Menu (right-click): Show/Hide pet, open HUD/Settings/Shop, quit
 - Icon color changes per dominant agent state (working=blue, waiting=amber, done=green, error=red, idle=gray)
 - **Sessions window built at runtime** (not declared in tauri.conf.json) so it can apply `set_overlay_collection_behavior` + stay hidden at launch
+- **Focus model (macOS):** the pet is shown via `orderFrontRegardless` (`show_pet_without_activating`) so it never takes key-window status — Tauri `show()` would steal key and dismiss an open popover. The popover is dismissed natively by a global `NSEvent` mouse monitor (`install_popover_dismiss_monitor`, fires on a click in any other app) plus explicit footer/Escape hides — no webview blur listener
 
 ### 2. Commands (src-tauri/src/commands/)
 

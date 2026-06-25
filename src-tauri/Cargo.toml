@@ -43,6 +43,10 @@ copet-protocol = { path = "../crates/copet-protocol" }
 # coordinate space macOS keeps consistent across mixed-DPI displays (Tauri's
 # cursor_position()/monitor coords are not; see tray.rs + tauri#7890).
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["NSWindow", "NSResponder", "NSScreen", "NSEvent"] }
+# block2: the sessions-popover dismiss monitor (tray.rs) passes a Rust closure to
+# NSEvent::addGlobalMonitorForEventsMatchingMask_handler, which takes an Objective-C
+# block — the "block2" feature on objc2-app-kit enables those block-taking methods.
+objc2-app-kit = { version = "0.3", default-features = false, features = ["NSWindow", "NSResponder", "NSScreen", "NSEvent", "block2"] }
 objc2-foundation = { version = "0.3", default-features = false, features = ["NSArray", "NSGeometry"] }
+block2 = "0.6"
 

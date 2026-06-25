@@ -108,8 +108,48 @@ pub fn init_tray(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         })
         .build(app)?;
 
+    // Dismiss the sessions popover on a click in any OTHER app — the canonical
+    // menu-bar click-away, replacing the webview blur listener (Phase 2).
+    install_popover_dismiss_monitor(app.handle());
+
     Ok(())
 }
+
+/// Install (once, for the app's lifetime) a global mouse-down monitor that dismisses the sessions popover when
+/// the user clicks ANOTHER application — the canonical menu-bar "click-away to dismiss",
+/// replacing the webview blur listener (unreliable under the Accessory activation policy).
+///
+/// `addGlobalMonitorForEventsMatchingMask` only observes events delivered to OTHER apps
+/// (never our own windows or status item), so every fire is by definition a click outside
+/// the popover — we just hide it when it's visible; no frame math, no per-show lifecycle.
+/// Installed once for the app's lifetime (the monitor token is intentionally leaked).
+/// Mouse-event monitors need no accessibility permission (unlike key-event monitors).
+#[cfg(target_os = "macos")]
+pub fn install_popover_dismiss_monitor(app: &AppHandle) {
+    use block2::RcBlock;
+    use core::ptr::NonNull;
+    use objc2_app_kit::{NSEvent, NSEventMask};
+
+    let handle = app.clone();
+    let block = RcBlock::new(move |_event: NonNull<NSEvent>| {
+        if let Some(win) = handle.get_webview_window("sessions") {
+            if win.is_visible().unwrap_or(false) {
+                let _ = win.hide();
+            }
+        }
+    });
+
+    // Called on the main thread from init_tray (setup()); the handler block owns a 'static
+    // AppHandle clone and outlives the monitor, which we keep for the whole app lifetime.
+    let mask = NSEventMask::LeftMouseDown | NSEventMask::RightMouseDown;
+    let monitor = NSEvent::addGlobalMonitorForEventsMatchingMask_handler(mask, &block);
+    // Keep the monitor registered for the whole app lifetime — never removeMonitor.
+    core::mem::forget(monitor);
+}
+
+/// Non-macOS: no global menu-bar popover, so no dismiss monitor is needed.
+#[cfg(not(target_os = "macos"))]
+pub fn install_popover_dismiss_monitor(_app: &AppHandle) {}
 
 /// Route tray menu events to window actions or app quit.
 fn handle_menu_event(app: &AppHandle, id: &str) {
@@ -123,16 +163,52 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
 }
 
 /// Toggle pet window visibility.
+///
+/// Hides via Tauri; SHOWS via `show_pet_without_activating` (macOS `orderFrontRegardless`)
+/// rather than `win.show()`. Tauri's `show()` maps to `makeKeyAndOrderFront:`, which makes
+/// the pet the key window and so blurs an open sessions popover — the popover auto-hides on
+/// blur, dismissing itself when the pet is toggled on. The pet is an `always_on_top`,
+/// click-through overlay, so ordering it front WITHOUT taking key is both sufficient and
+/// correct (it also never deactivates the user's frontmost app on the global shortcut).
 pub fn toggle_pet_window(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("pet") {
         let visible = win.is_visible().unwrap_or(false);
         if visible {
             let _ = win.hide();
         } else {
-            let _ = win.show();
-            let _ = win.set_focus();
+            show_pet_without_activating(&win);
         }
     }
+}
+
+/// Show `win` frontmost WITHOUT making it the key window or activating the app.
+///
+/// macOS: dispatch to the main thread (callers include Tauri commands and the global-shortcut
+/// handler, which are NOT on the main thread, and AppKit window mutation must be) and call
+/// `orderFrontRegardless`. Falls back to Tauri `show()` if the native handle is unavailable.
+#[cfg(target_os = "macos")]
+fn show_pet_without_activating(win: &WebviewWindow) {
+    let w = win.clone();
+    let _ = win.run_on_main_thread(move || {
+        use objc2_app_kit::NSWindow;
+        match w.ns_window() {
+            Ok(ptr) if !ptr.is_null() => {
+                // SAFETY: Tauri returns a live NSWindow pointer for the macOS pet window,
+                // and this closure runs on the main thread (run_on_main_thread).
+                let ns_window: &NSWindow = unsafe { &*(ptr.cast::<NSWindow>()) };
+                ns_window.orderFrontRegardless();
+            }
+            _ => {
+                let _ = w.show();
+            }
+        }
+    });
+}
+
+/// Non-macOS: no key-theft problem to avoid — plain Tauri show.
+#[cfg(not(target_os = "macos"))]
+fn show_pet_without_activating(win: &WebviewWindow) {
+    let _ = win.show();
 }
 
 /// Toggle the sessions popover: show under the cursor (on the cursor's monitor),

@@ -2,9 +2,9 @@
  * sessions-entry.tsx — tray popover control panel (Phase 1 redesign).
  *
  * Layout (top→bottom): header (agent counts) → companion card → agents list →
- * toggles (Show pet) → footer (Settings / Quit). Auto-hides on blur / Escape;
- * macOS Accessory can make blur unreliable, so Escape + clicking the tray again
- * (handled in tray.rs) are the fallback ways to dismiss.
+ * toggles (Show pet) → footer (Settings / Quit). Dismissed natively: a global
+ * mouse monitor in tray.rs hides it on a click in any other app, the footer
+ * actions hide it explicitly, and Escape hides it here (no webview-blur listener).
  *
  * Phase 1 uses only existing data. Phase 2-4 add today's token/feed counts,
  * pet name, size slider, and the menu-bar / updates toggles.
@@ -22,19 +22,11 @@ import { createSessionsSignal, createThemeSignal, createNowSignal } from "../sha
 import { countRunning } from "../shared/session-counts.js";
 import { togglePet, openSettings, quitApp } from "../shared/tauri-commands.js";
 
-// ── Auto-hide wiring (module scope: one window per webview) ───────────────────
+// ── Dismiss wiring (module scope: one window per webview) ─────────────────────
+// Native dismissal: a global mouse monitor in the Rust tray code hides the popover
+// on a click in any OTHER app (replaces the Accessory-unreliable webview blur); the
+// footer actions hide it explicitly; Escape hides it here.
 const win = getCurrentWindow();
-let justShown = false;
-
-void win.onFocusChanged(({ payload: focused }) => {
-  if (focused) {
-    // Ignore the transient blur that can fire right after show() on macOS.
-    justShown = true;
-    setTimeout(() => { justShown = false; }, 200);
-  } else if (!justShown) {
-    void win.hide();
-  }
-});
 
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") void win.hide();
@@ -51,6 +43,8 @@ function Popover() {
   async function handleTogglePet(): Promise<void> {
     const next = !petShown();
     setPetShown(next);
+    // The pet now shows via orderFrontRegardless (never takes key), so toggling it
+    // no longer blurs this popover — no focus suppression needed.
     try {
       await togglePet();
     } catch {
@@ -88,7 +82,7 @@ function Popover() {
       </div>
 
       <div class="popover-footer">
-        <button class="popover-foot-btn" onClick={() => void openSettings()}>
+        <button class="popover-foot-btn" onClick={() => { void win.hide(); void openSettings(); }}>
           ⚙ Settings
         </button>
         <button class="popover-foot-btn" onClick={() => void quitApp()}>

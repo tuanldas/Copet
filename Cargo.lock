@@ -509,6 +509,7 @@ dependencies = [
 name = "copet"
 version = "0.1.0"
 dependencies = [
+ "block2",
  "copet-protocol",
  "interprocess",
  "objc2",
