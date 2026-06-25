@@ -85,7 +85,7 @@ body {
 }
 
 .shop-balance__amount {
-  font-family: "Pixelify Sans", monospace;
+  font-family: "Nunito", sans-serif;
   font-size: 15px;
   font-weight: 700;
   color: #8b5cf6;
@@ -223,7 +223,7 @@ body {
 }
 
 .shop-card__price {
-  font-family: "Pixelify Sans", monospace;
+  font-family: "Nunito", sans-serif;
   font-size: 13px;
   font-weight: 700;
   color: #8b5cf6;
